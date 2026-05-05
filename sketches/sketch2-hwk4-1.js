@@ -1,11 +1,10 @@
+// Instance-mode sketch for tab 2
 registerSketch('sk2', function(p) {
     const CANVAS_SIZE = 800;
 
-    // VERSION 2: Smooth transitions
-    // CHANGE: Replaced second()-based timing with delta-time accumulation.
-    // Added cubic easeInOut/easeIn/easeOut. Character poses are keyframe objects
-    // interpolated with lerpPose(). Ball arc upgraded to cubic bezier.
-    // Bounce uses parabolic arcs with decreasing amplitude.
+    // VERSION 3: Floor shadow
+    // CHANGE: Added a dynamic floor shadow beneath the character. Shadow width
+    // scales with crouch depth — wider when crouching, narrower when standing.
 
     var W = 800,
         H = 800;
@@ -56,7 +55,6 @@ registerSketch('sk2', function(p) {
         var t = (cycleTime % PHASE_DUR) / PHASE_DUR;
 
         p.background(18, 18, 28);
-
         p.noStroke();
         p.fill(40, 30, 20);
         p.rect(0, FLOOR_Y, W, H - FLOOR_Y);
@@ -77,14 +75,10 @@ registerSketch('sk2', function(p) {
         else pose = lerpPose(POSES.returnStart, POSES.returnEnd, easeInOut(t));
 
         var bx, by;
-        if (phase === 0) {
-            var et = easeInOut(t);
+        if (phase === 0) { var et = easeInOut(t);
             bx = CHAR_X + p.lerp(10, 14, et);
-            by = p.lerp(FLOOR_Y - 8, FLOOR_Y - 80, et);
-        } else if (phase === 1) {
-            bx = CHAR_X + 14;
-            by = FLOOR_Y - 80 + Math.sin(t * Math.PI * 2) * 3;
-        } else if (phase === 2) {
+            by = p.lerp(FLOOR_Y - 8, FLOOR_Y - 80, et); } else if (phase === 1) { bx = CHAR_X + 14;
+            by = FLOOR_Y - 80 + Math.sin(t * Math.PI * 2) * 3; } else if (phase === 2) {
             var shootT = Math.min(t / 0.85, 1),
                 st = easeInOut(shootT);
             var sx = CHAR_X + 14,
@@ -188,6 +182,13 @@ registerSketch('sk2', function(p) {
         var headY = groundY - pose.headOff + pose.crouchDip;
         var bodyTopY = headY + 14,
             bodyBotY = groundY - 10;
+
+        // ★ NEW: floor shadow
+        var shadowW = 30 + pose.crouchDip * 0.5;
+        p.noStroke();
+        p.fill(10, 10, 15, 60);
+        p.ellipse(cx, groundY + 2, shadowW, 6);
+
         p.stroke(220);
         p.strokeWeight(3);
         p.noFill();
