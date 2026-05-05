@@ -1,227 +1,209 @@
-// Instance-mode sketch for tab 2
-// Instance-mode sketch for tab 2
 registerSketch('sk2', function(p) {
     const CANVAS_SIZE = 800;
 
-    // VERSION 1: Basic functional version
-    // Basic animation with second()-based timing, simple easing, no visual polish
+    // VERSION 2: Smooth transitions
+    // CHANGE: Replaced second()-based timing with delta-time accumulation.
+    // Added cubic easeInOut/easeIn/easeOut. Character poses are keyframe objects
+    // interpolated with lerpPose(). Ball arc upgraded to cubic bezier.
+    // Bounce uses parabolic arcs with decreasing amplitude.
 
-    const W = 800,
+    var W = 800,
         H = 800;
-    const PHASE_DUR = 6;
-    const TOTAL = 24;
+    var PHASE_DUR = 6,
+        TOTAL = 24;
+    var PHASES = ['INHALE', 'HOLD', 'EXHALE', 'HOLD'];
+    var COLORS = ['#4FC3F7', '#FFD54F', '#AED581', '#FFD54F'];
 
-    const PHASES = ['INHALE', 'HOLD', 'EXHALE', 'HOLD'];
-    const COLORS = ['#4FC3F7', '#FFD54F', '#AED581', '#FFD54F'];
+    var CHAR_X = 200,
+        FLOOR_Y = 600,
+        HOOP_X = 650,
+        HOOP_Y = 320,
+        RIM_W = 52;
 
-    const CHAR_X = 200;
-    const FLOOR_Y = 600;
-    const HOOP_X = 650;
-    const HOOP_Y = 320;
-    const RIM_W = 52;
+    var POSES = {
+        inhaleStart: { headOff: 90, crouchDip: 30, kneeSpread: 18, armRightX: 16, armRightY: 40, armLeftX: -10, armLeftY: 45 },
+        holdStart: { headOff: 130, crouchDip: 0, kneeSpread: 6, armRightX: 14, armRightY: 18, armLeftX: -10, armLeftY: 18 },
+        exhaleStart: { headOff: 126, crouchDip: 0, kneeSpread: 8, armRightX: 14, armRightY: 14, armLeftX: -10, armLeftY: 14 },
+        exhaleEnd: { headOff: 134, crouchDip: 0, kneeSpread: 2, armRightX: 24, armRightY: -30, armLeftX: -8, armLeftY: 8 },
+        returnStart: { headOff: 130, crouchDip: 0, kneeSpread: 4, armRightX: 14, armRightY: 22, armLeftX: -10, armLeftY: 22 },
+        returnEnd: { headOff: 130, crouchDip: 0, kneeSpread: 4, armRightX: 10, armRightY: 28, armLeftX: -10, armLeftY: 28 }
+    };
 
-    var ease = function(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; };
+    function easeInOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+    function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+    function easeIn(t) { return t * t * t; }
+
+    function lerpPose(a, b, t) { var r = {}; for (var k in a) r[k] = a[k] + (b[k] - a[k]) * t; return r; }
+
+    var cycleTime = 0,
+        lastMillis = 0;
 
     p.setup = function() {
         p.createCanvas(CANVAS_SIZE, CANVAS_SIZE);
         p.angleMode(p.DEGREES);
         p.textFont('monospace');
+        lastMillis = p.millis();
     };
 
     p.draw = function() {
-        var s = p.second();
-        var ms = p.millis() % 1000;
-        var elapsed = (s % TOTAL) + ms / 1000;
-        var phase = Math.floor(elapsed / PHASE_DUR);
-        var t = (elapsed % PHASE_DUR) / PHASE_DUR;
-        var et = ease(t);
+        var now = p.millis(),
+            dt = (now - lastMillis) / 1000;
+        lastMillis = now;
+        cycleTime = (cycleTime + dt) % TOTAL;
+        var phase = Math.floor(cycleTime / PHASE_DUR);
+        var t = (cycleTime % PHASE_DUR) / PHASE_DUR;
 
         p.background(18, 18, 28);
 
-        // floor
         p.noStroke();
         p.fill(40, 30, 20);
         p.rect(0, FLOOR_Y, W, H - FLOOR_Y);
+        p.stroke(50, 38, 25);
+        p.strokeWeight(0.5);
+        for (var i = 0; i < 6; i++) p.line(0, FLOOR_Y + 8 + i * 15, W, FLOOR_Y + 8 + i * 15);
         p.stroke(80, 60, 30);
         p.strokeWeight(1.5);
         p.line(0, FLOOR_Y, W, FLOOR_Y);
 
-        drawHoop(p);
+        drawHoop();
+        drawUI(phase, t);
 
-        // UI
-        var phaseColor = COLORS[phase];
-        p.noStroke();
-        p.fill(phaseColor);
-        p.textAlign(p.CENTER, p.TOP);
-        p.textSize(22);
-        p.textStyle(p.BOLD);
-        p.text(PHASES[phase], W / 2, 18);
+        var pose;
+        if (phase === 0) pose = lerpPose(POSES.inhaleStart, POSES.holdStart, easeInOut(t));
+        else if (phase === 1) pose = lerpPose(POSES.holdStart, POSES.exhaleStart, easeInOut(t));
+        else if (phase === 2) pose = lerpPose(POSES.exhaleStart, POSES.exhaleEnd, easeInOut(t));
+        else pose = lerpPose(POSES.returnStart, POSES.returnEnd, easeInOut(t));
 
-        var secLeft = Math.ceil(PHASE_DUR - t * PHASE_DUR);
-        p.textSize(14);
-        p.textStyle(p.NORMAL);
-        p.fill(180);
-        p.text(secLeft + 's', W / 2, 46);
-
-        p.noStroke();
-        p.fill(40);
-        p.rect(W / 2 - 120, 66, 240, 8, 4);
-        p.fill(phaseColor);
-        p.rect(W / 2 - 120, 66, 240 * t, 8, 4);
-
-        for (var i = 0; i < 4; i++) {
-            p.fill(i === phase ? phaseColor : 60);
-            p.noStroke();
-            p.ellipse(W / 2 - 45 + i * 30, 90, 10, 10);
-        }
-
-        // ball position
         var bx, by;
         if (phase === 0) {
-            bx = CHAR_X + 10;
-            by = p.lerp(FLOOR_Y, FLOOR_Y - 80, et);
+            var et = easeInOut(t);
+            bx = CHAR_X + p.lerp(10, 14, et);
+            by = p.lerp(FLOOR_Y - 8, FLOOR_Y - 80, et);
         } else if (phase === 1) {
             bx = CHAR_X + 14;
-            by = FLOOR_Y - 80;
+            by = FLOOR_Y - 80 + Math.sin(t * Math.PI * 2) * 3;
         } else if (phase === 2) {
-            var startX = CHAR_X + 14,
-                startY = FLOOR_Y - 80;
-            var endX = HOOP_X,
-                endY = HOOP_Y + 5;
-            var peakY = Math.min(startY, endY) - 120;
-            bx = p.lerp(p.lerp(startX, (startX + endX) / 2, et),
-                p.lerp((startX + endX) / 2, endX, et), et);
-            by = p.lerp(p.lerp(startY, peakY, et),
-                p.lerp(peakY, endY, et), et);
+            var shootT = Math.min(t / 0.85, 1),
+                st = easeInOut(shootT);
+            var sx = CHAR_X + 14,
+                sy = FLOOR_Y - 80,
+                ex = HOOP_X,
+                ey = HOOP_Y + 5;
+            var c1x = sx + 80,
+                c1y = sy - 180,
+                c2x = ex - 60,
+                c2y = ey - 100,
+                u = 1 - st;
+            bx = u * u * u * sx + 3 * u * u * st * c1x + 3 * u * st * st * c2x + st * st * st * ex;
+            by = u * u * u * sy + 3 * u * u * st * c1y + 3 * u * st * st * c2y + st * st * st * ey;
         } else {
-            if (et < 0.15) {
-                bx = HOOP_X + p.lerp(0, 30, et / 0.15);
-                by = HOOP_Y + p.lerp(5, 40, et / 0.15);
-            } else if (et < 0.3) {
-                var sub = (et - 0.15) / 0.15;
-                bx = p.lerp(HOOP_X + 30, HOOP_X + 50, sub);
-                by = p.lerp(HOOP_Y + 40, FLOOR_Y - 8, sub);
-            } else {
-                var rollT = ease((et - 0.3) / 0.7);
-                bx = p.lerp(HOOP_X + 50, CHAR_X + 10, rollT);
-                by = FLOOR_Y - 8;
-            }
+            if (t < 0.08) { bx = HOOP_X;
+                by = p.lerp(HOOP_Y + 5, HOOP_Y + 50, easeIn(t / 0.08)); } else if (t < 0.22) { var bt = (t - 0.08) / 0.14;
+                bx = p.lerp(HOOP_X, HOOP_X + 40, bt);
+                by = FLOOR_Y - 8 - Math.sin(bt * Math.PI) * 70 * (1 - bt * 0.3); } else if (t < 0.34) { var bt2 = (t - 0.22) / 0.12;
+                bx = p.lerp(HOOP_X + 40, HOOP_X + 58, bt2);
+                by = FLOOR_Y - 8 - Math.sin(bt2 * Math.PI) * 22; } else { var rollT = easeOut((t - 0.34) / 0.66);
+                bx = p.lerp(HOOP_X + 58, CHAR_X + 10, rollT);
+                by = FLOOR_Y - 8; }
         }
 
-        drawCharacter(p, phase, t, et);
-
-        // ball — flat circle
+        drawCharacter(pose);
         p.noStroke();
         p.fill(210, 120, 40);
         p.ellipse(bx, by, 28, 28);
 
-        // footer
         p.fill(80);
         p.noStroke();
         p.textAlign(p.CENTER, p.BOTTOM);
         p.textSize(11);
         p.textStyle(p.NORMAL);
         p.text('BOX BREATHING \u00B7 6s PER PHASE \u00B7 24s CYCLE', W / 2, H - 12);
-
-        // frame
         p.noFill();
         p.stroke(0);
         p.strokeWeight(1);
         p.rect(0, 0, p.width - 1, p.height - 1);
     };
 
-    function drawHoop(pp) {
-        var hx = HOOP_X,
-            hy = HOOP_Y,
-            rw = RIM_W;
-        pp.stroke(130);
-        pp.strokeWeight(5);
-        pp.line(hx + rw / 2 + 14, hy + 28, hx + rw / 2 + 14, FLOOR_Y);
-        pp.fill(25, 25, 45);
-        pp.stroke(180);
-        pp.strokeWeight(3);
-        pp.rect(hx + rw / 2 + 8, hy - 48, 12, 80, 2);
-        pp.noFill();
-        pp.stroke(220, 60, 60);
-        pp.strokeWeight(1.5);
-        pp.rect(hx + rw / 2 + 9, hy - 28, 10, 20);
-        pp.stroke(210, 70, 30);
-        pp.strokeWeight(4);
-        pp.line(hx - rw / 2, hy, hx + rw / 2, hy);
-        pp.stroke(190, 190, 190, 140);
-        pp.strokeWeight(1);
-        for (var i = 0; i <= 4; i++) {
-            var nx = p.lerp(hx - rw / 2, hx + rw / 2, i / 4);
-            pp.line(nx, hy, p.lerp(hx - rw / 4, hx + rw / 4, i / 4), hy + 40);
-        }
-        for (var j = 1; j <= 3; j++) {
-            var ny = hy + j * 10,
-                shrink = j * 3;
-            pp.line(hx - rw / 2 + shrink, ny, hx + rw / 2 - shrink, ny);
+    function drawUI(phase, t) {
+        var col = p.color(COLORS[phase]);
+        p.noStroke();
+        p.fill(col);
+        p.textAlign(p.CENTER, p.TOP);
+        p.textSize(22);
+        p.textStyle(p.BOLD);
+        p.text(PHASES[phase], W / 2, 18);
+        p.textSize(14);
+        p.textStyle(p.NORMAL);
+        p.fill(160);
+        p.text(Math.ceil(PHASE_DUR * (1 - t)) + 's', W / 2, 46);
+        p.noStroke();
+        p.fill(35);
+        p.rect(W / 2 - 120, 66, 240, 8, 4);
+        p.fill(col);
+        p.rect(W / 2 - 120, 66, 240 * t, 8, 4);
+        for (var i = 0; i < 4; i++) {
+            var isActive = i === phase;
+            p.fill(isActive ? col : p.color(55));
+            p.noStroke();
+            p.ellipse(W / 2 - 45 + i * 30, 90, isActive ? 11 : 8, isActive ? 11 : 8);
+            if (isActive) { p.fill(120);
+                p.textSize(8);
+                p.textAlign(p.CENTER, p.TOP);
+                p.text(PHASES[i], W / 2 - 45 + i * 30, 99); }
         }
     }
 
-    function drawCharacter(pp, phase, t, et) {
+    function drawHoop() {
+        var hx = HOOP_X,
+            hy = HOOP_Y,
+            rw = RIM_W;
+        p.stroke(110);
+        p.strokeWeight(5);
+        p.line(hx + rw / 2 + 14, hy + 28, hx + rw / 2 + 14, FLOOR_Y);
+        p.fill(25, 25, 45);
+        p.stroke(160);
+        p.strokeWeight(3);
+        p.rect(hx + rw / 2 + 8, hy - 48, 12, 80, 2);
+        p.noFill();
+        p.stroke(200, 50, 50);
+        p.strokeWeight(1.5);
+        p.rect(hx + rw / 2 + 9, hy - 28, 10, 20);
+        p.stroke(210, 70, 30);
+        p.strokeWeight(4);
+        p.line(hx - rw / 2, hy, hx + rw / 2, hy);
+        p.stroke(190, 190, 190, 140);
+        p.strokeWeight(1);
+        for (var i = 0; i <= 4; i++) { var nx = p.lerp(hx - rw / 2, hx + rw / 2, i / 4);
+            p.line(nx, hy, p.lerp(hx - rw / 4, hx + rw / 4, i / 4), hy + 40); }
+        for (var j = 1; j <= 3; j++) { var ny = hy + j * 10,
+                sh = j * 3;
+            p.line(hx - rw / 2 + sh, ny, hx + rw / 2 - sh, ny); }
+    }
+
+    function drawCharacter(pose) {
         var cx = CHAR_X,
             groundY = FLOOR_Y;
-        pp.stroke(220);
-        pp.strokeWeight(3);
-        pp.noFill();
-        var headY, bodyTopY, bodyBotY, kneeAngle;
-
-        if (phase === 0) {
-            var crouch = p.lerp(40, 0, et);
-            headY = groundY - 100 - crouch * 0.6 + (1 - et) * 30;
-            bodyTopY = headY + 14;
+        var headY = groundY - pose.headOff + pose.crouchDip;
+        var bodyTopY = headY + 14,
             bodyBotY = groundY - 10;
-            kneeAngle = p.lerp(40, 0, et);
-        } else if (phase === 1) {
-            headY = groundY - 130;
-            bodyTopY = headY + 14;
-            bodyBotY = groundY - 10;
-            kneeAngle = p.lerp(10, 5, et);
-        } else if (phase === 2) {
-            headY = groundY - 130;
-            bodyTopY = headY + 14;
-            bodyBotY = groundY - 10;
-            kneeAngle = 0;
-        } else {
-            headY = groundY - 130;
-            bodyTopY = headY + 14;
-            bodyBotY = groundY - 10;
-            kneeAngle = 0;
-        }
-
-        pp.fill(220);
-        pp.noStroke();
-        pp.ellipse(cx, headY, 20, 20);
-        pp.stroke(220);
-        pp.strokeWeight(3);
-        pp.noFill();
-        pp.line(cx, bodyTopY, cx, bodyBotY);
-
-        var midLegY = bodyBotY + (groundY - bodyBotY) * 0.5;
-        pp.line(cx, bodyBotY, cx - 12 - kneeAngle * 0.2, midLegY);
-        pp.line(cx - 12 - kneeAngle * 0.2, midLegY, cx - 8, groundY);
-        pp.line(cx, bodyBotY, cx + 12 + kneeAngle * 0.2, midLegY);
-        pp.line(cx + 12 + kneeAngle * 0.2, midLegY, cx + 8, groundY);
-
-        var shoulderY = bodyTopY + 10;
-        if (phase === 0) {
-            var armEndY = p.lerp(bodyBotY + 20, shoulderY + 10, et);
-            pp.line(cx, shoulderY, cx + 16, armEndY);
-            pp.line(cx, shoulderY, cx - 10, armEndY + 5);
-        } else if (phase === 1) {
-            pp.line(cx, shoulderY, cx + 14, shoulderY + 18);
-            pp.line(cx, shoulderY, cx - 10, shoulderY + 18);
-        } else if (phase === 2) {
-            var armAngle = p.lerp(0, -60, et);
-            pp.line(cx, shoulderY, cx + p.lerp(14, 24, et), shoulderY + armAngle * 0.5);
-            pp.line(cx, shoulderY, cx - 10, shoulderY + p.lerp(18, 5, et));
-        } else {
-            pp.line(cx, shoulderY, cx + 14, shoulderY + 22);
-            pp.line(cx, shoulderY, cx - 10, shoulderY + 22);
-        }
+        p.stroke(220);
+        p.strokeWeight(3);
+        p.noFill();
+        p.line(cx, bodyTopY, cx, bodyBotY);
+        var kneeY = bodyBotY + (groundY - bodyBotY) * 0.5,
+            ks = pose.kneeSpread;
+        p.line(cx, bodyBotY, cx - ks, kneeY);
+        p.line(cx - ks, kneeY, cx - 8, groundY);
+        p.line(cx, bodyBotY, cx + ks, kneeY);
+        p.line(cx + ks, kneeY, cx + 8, groundY);
+        var shY = bodyTopY + 10;
+        p.line(cx, shY, cx + pose.armRightX, shY + pose.armRightY);
+        p.line(cx, shY, cx + pose.armLeftX, shY + pose.armLeftY);
+        p.fill(220);
+        p.noStroke();
+        p.ellipse(cx, headY, 20, 20);
     }
 
     p.windowResized = function() { p.resizeCanvas(CANVAS_SIZE, CANVAS_SIZE); };
