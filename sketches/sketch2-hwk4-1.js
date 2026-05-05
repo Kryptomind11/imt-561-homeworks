@@ -1,10 +1,6 @@
 registerSketch('sk2', function(p) {
     const CANVAS_SIZE = 800;
 
-    // VERSION 4: Ball detail
-    // CHANGE: Added basketball seam lines (horizontal + two curved arcs),
-    // specular highlight for 3D depth, and ball spin rotation during flight/roll.
-
     var W = 800,
         H = 800;
     var PHASE_DUR = 6,
@@ -82,7 +78,7 @@ registerSketch('sk2', function(p) {
             bx = CHAR_X + 14;
             by = FLOOR_Y - 80 + Math.sin(t * Math.PI * 2) * 3;
         } else if (phase === 2) {
-            var shootT = Math.min(t / 0.85, 1),
+            var shootT = t,
                 st = easeInOut(shootT);
             var sx = CHAR_X + 14,
                 sy = FLOOR_Y - 80,
@@ -117,9 +113,29 @@ registerSketch('sk2', function(p) {
         }
 
         drawCharacter(pose);
-
-        // ★ NEW: detailed ball with seams, highlight, spin
         drawBall(bx, by, 14, ballSpin);
+
+        // ★ NEW: SWISH text — fade in, drift up, fade out
+        if (phase === 2 && t > 0.82) {
+            var fadeIn = easeOut(p.constrain(p.map(t, 0.78, 0.86, 0, 1), 0, 1));
+            var fadeOut = t > 0.92 ? easeIn(p.constrain(p.map(t, 0.92, 1.0, 1, 0), 0, 1)) : 1;
+            var alpha = fadeIn * fadeOut * 220;
+            var drift = p.map(t, 0.78, 1.0, 0, -14);
+            p.fill(255, 220, 80, alpha);
+            p.noStroke();
+            p.textSize(18);
+            p.textStyle(p.BOLD);
+            p.textAlign(p.CENTER);
+            p.text('SWISH', HOOP_X - 10, HOOP_Y - 40 + drift);
+        }
+
+        // net ripple
+        if ((phase === 2 && t > 0.88) || (phase === 3 && t < 0.12)) {
+            var rippleT = phase === 2 ?
+                p.map(t, 0.84, 1.0, 0, 0.5) :
+                p.map(t, 0, 0.12, 0.5, 1.0);
+            drawNetRipple(rippleT);
+        }
 
         p.fill(80);
         p.noStroke();
@@ -182,16 +198,55 @@ registerSketch('sk2', function(p) {
         p.stroke(210, 70, 30);
         p.strokeWeight(4);
         p.line(hx - rw / 2, hy, hx + rw / 2, hy);
-        p.stroke(190, 190, 190, 140);
+        drawNet();
+    }
+
+    function drawNet() {
+        var hx = HOOP_X,
+            hy = HOOP_Y,
+            rw = RIM_W;
+        var netDepth = 42,
+            bottomW = rw * 0.4;
+        p.stroke(190, 190, 190, 130);
         p.strokeWeight(1);
-        for (var i = 0; i <= 4; i++) {
-            var nx = p.lerp(hx - rw / 2, hx + rw / 2, i / 4);
-            p.line(nx, hy, p.lerp(hx - rw / 4, hx + rw / 4, i / 4), hy + 40);
+        for (var i = 0; i <= 5; i++) {
+            var topX = p.lerp(hx - rw / 2, hx + rw / 2, i / 5);
+            var botX = p.lerp(hx - bottomW / 2, hx + bottomW / 2, i / 5);
+            var midX = (topX + botX) / 2;
+            p.noFill();
+            p.beginShape();
+            p.vertex(topX, hy + 2);
+            p.quadraticVertex(midX, hy + netDepth * 0.5, botX, hy + netDepth);
+            p.endShape();
         }
         for (var j = 1; j <= 3; j++) {
-            var ny = hy + j * 10,
-                sh = j * 3;
-            p.line(hx - rw / 2 + sh, ny, hx + rw / 2 - sh, ny);
+            var frac = j / 4,
+                ny = hy + 2 + netDepth * frac,
+                shrink = (rw - bottomW) / 2 * frac;
+            p.line(hx - rw / 2 + shrink, ny, hx + rw / 2 - shrink, ny);
+        }
+    }
+
+    function drawNetRipple(rippleT) {
+        var hx = HOOP_X,
+            hy = HOOP_Y,
+            rw = RIM_W;
+        var netDepth = 42,
+            bottomW = rw * 0.4;
+        var rippleAmt = Math.sin(rippleT * Math.PI) * 6;
+        p.stroke(210, 210, 210, 160);
+        p.strokeWeight(1);
+        for (var i = 0; i <= 5; i++) {
+            var topX = p.lerp(hx - rw / 2, hx + rw / 2, i / 5);
+            var botX = p.lerp(hx - bottomW / 2, hx + bottomW / 2, i / 5);
+            var wave = Math.sin(i * 1.5 + rippleT * 10) * rippleAmt;
+            var midX = (topX + botX) / 2 + wave;
+            var midY = hy + netDepth * 0.5 + Math.abs(wave) * 0.4;
+            p.noFill();
+            p.beginShape();
+            p.vertex(topX, hy + 2);
+            p.quadraticVertex(midX, midY, botX, hy + netDepth + rippleAmt * 0.25);
+            p.endShape();
         }
     }
 
@@ -223,7 +278,6 @@ registerSketch('sk2', function(p) {
         p.ellipse(cx, headY, 20, 20);
     }
 
-    // ★ NEW: ball with seams, highlight, spin
     function drawBall(x, y, r, spin) {
         p.push();
         p.translate(x, y);
