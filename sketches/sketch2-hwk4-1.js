@@ -1,10 +1,9 @@
-// Instance-mode sketch for tab 2
 registerSketch('sk2', function(p) {
     const CANVAS_SIZE = 800;
 
-    // VERSION 3: Floor shadow
-    // CHANGE: Added a dynamic floor shadow beneath the character. Shadow width
-    // scales with crouch depth — wider when crouching, narrower when standing.
+    // VERSION 4: Ball detail
+    // CHANGE: Added basketball seam lines (horizontal + two curved arcs),
+    // specular highlight for 3D depth, and ball spin rotation during flight/roll.
 
     var W = 800,
         H = 800;
@@ -51,8 +50,8 @@ registerSketch('sk2', function(p) {
             dt = (now - lastMillis) / 1000;
         lastMillis = now;
         cycleTime = (cycleTime + dt) % TOTAL;
-        var phase = Math.floor(cycleTime / PHASE_DUR);
-        var t = (cycleTime % PHASE_DUR) / PHASE_DUR;
+        var phase = Math.floor(cycleTime / PHASE_DUR),
+            t = (cycleTime % PHASE_DUR) / PHASE_DUR;
 
         p.background(18, 18, 28);
         p.noStroke();
@@ -74,11 +73,15 @@ registerSketch('sk2', function(p) {
         else if (phase === 2) pose = lerpPose(POSES.exhaleStart, POSES.exhaleEnd, easeInOut(t));
         else pose = lerpPose(POSES.returnStart, POSES.returnEnd, easeInOut(t));
 
-        var bx, by;
-        if (phase === 0) { var et = easeInOut(t);
+        var bx, by, ballSpin = 0;
+        if (phase === 0) {
+            var et = easeInOut(t);
             bx = CHAR_X + p.lerp(10, 14, et);
-            by = p.lerp(FLOOR_Y - 8, FLOOR_Y - 80, et); } else if (phase === 1) { bx = CHAR_X + 14;
-            by = FLOOR_Y - 80 + Math.sin(t * Math.PI * 2) * 3; } else if (phase === 2) {
+            by = p.lerp(FLOOR_Y - 8, FLOOR_Y - 80, et);
+        } else if (phase === 1) {
+            bx = CHAR_X + 14;
+            by = FLOOR_Y - 80 + Math.sin(t * Math.PI * 2) * 3;
+        } else if (phase === 2) {
             var shootT = Math.min(t / 0.85, 1),
                 st = easeInOut(shootT);
             var sx = CHAR_X + 14,
@@ -92,21 +95,31 @@ registerSketch('sk2', function(p) {
                 u = 1 - st;
             bx = u * u * u * sx + 3 * u * u * st * c1x + 3 * u * st * st * c2x + st * st * st * ex;
             by = u * u * u * sy + 3 * u * u * st * c1y + 3 * u * st * st * c2y + st * st * st * ey;
+            ballSpin = st * 720;
         } else {
-            if (t < 0.08) { bx = HOOP_X;
-                by = p.lerp(HOOP_Y + 5, HOOP_Y + 50, easeIn(t / 0.08)); } else if (t < 0.22) { var bt = (t - 0.08) / 0.14;
+            if (t < 0.08) {
+                bx = HOOP_X;
+                by = p.lerp(HOOP_Y + 5, HOOP_Y + 50, easeIn(t / 0.08));
+            } else if (t < 0.22) {
+                var bt = (t - 0.08) / 0.14;
                 bx = p.lerp(HOOP_X, HOOP_X + 40, bt);
-                by = FLOOR_Y - 8 - Math.sin(bt * Math.PI) * 70 * (1 - bt * 0.3); } else if (t < 0.34) { var bt2 = (t - 0.22) / 0.12;
+                by = FLOOR_Y - 8 - Math.sin(bt * Math.PI) * 70 * (1 - bt * 0.3);
+            } else if (t < 0.34) {
+                var bt2 = (t - 0.22) / 0.12;
                 bx = p.lerp(HOOP_X + 40, HOOP_X + 58, bt2);
-                by = FLOOR_Y - 8 - Math.sin(bt2 * Math.PI) * 22; } else { var rollT = easeOut((t - 0.34) / 0.66);
+                by = FLOOR_Y - 8 - Math.sin(bt2 * Math.PI) * 22;
+            } else {
+                var rollT = easeOut((t - 0.34) / 0.66);
                 bx = p.lerp(HOOP_X + 58, CHAR_X + 10, rollT);
-                by = FLOOR_Y - 8; }
+                by = FLOOR_Y - 8;
+                ballSpin = -rollT * 480;
+            }
         }
 
         drawCharacter(pose);
-        p.noStroke();
-        p.fill(210, 120, 40);
-        p.ellipse(bx, by, 28, 28);
+
+        // ★ NEW: detailed ball with seams, highlight, spin
+        drawBall(bx, by, 14, ballSpin);
 
         p.fill(80);
         p.noStroke();
@@ -138,14 +151,16 @@ registerSketch('sk2', function(p) {
         p.fill(col);
         p.rect(W / 2 - 120, 66, 240 * t, 8, 4);
         for (var i = 0; i < 4; i++) {
-            var isActive = i === phase;
-            p.fill(isActive ? col : p.color(55));
+            var a = i === phase;
+            p.fill(a ? col : p.color(55));
             p.noStroke();
-            p.ellipse(W / 2 - 45 + i * 30, 90, isActive ? 11 : 8, isActive ? 11 : 8);
-            if (isActive) { p.fill(120);
+            p.ellipse(W / 2 - 45 + i * 30, 90, a ? 11 : 8, a ? 11 : 8);
+            if (a) {
+                p.fill(120);
                 p.textSize(8);
                 p.textAlign(p.CENTER, p.TOP);
-                p.text(PHASES[i], W / 2 - 45 + i * 30, 99); }
+                p.text(PHASES[i], W / 2 - 45 + i * 30, 99);
+            }
         }
     }
 
@@ -169,11 +184,15 @@ registerSketch('sk2', function(p) {
         p.line(hx - rw / 2, hy, hx + rw / 2, hy);
         p.stroke(190, 190, 190, 140);
         p.strokeWeight(1);
-        for (var i = 0; i <= 4; i++) { var nx = p.lerp(hx - rw / 2, hx + rw / 2, i / 4);
-            p.line(nx, hy, p.lerp(hx - rw / 4, hx + rw / 4, i / 4), hy + 40); }
-        for (var j = 1; j <= 3; j++) { var ny = hy + j * 10,
+        for (var i = 0; i <= 4; i++) {
+            var nx = p.lerp(hx - rw / 2, hx + rw / 2, i / 4);
+            p.line(nx, hy, p.lerp(hx - rw / 4, hx + rw / 4, i / 4), hy + 40);
+        }
+        for (var j = 1; j <= 3; j++) {
+            var ny = hy + j * 10,
                 sh = j * 3;
-            p.line(hx - rw / 2 + sh, ny, hx + rw / 2 - sh, ny); }
+            p.line(hx - rw / 2 + sh, ny, hx + rw / 2 - sh, ny);
+        }
     }
 
     function drawCharacter(pose) {
@@ -182,13 +201,10 @@ registerSketch('sk2', function(p) {
         var headY = groundY - pose.headOff + pose.crouchDip;
         var bodyTopY = headY + 14,
             bodyBotY = groundY - 10;
-
-        // ★ NEW: floor shadow
         var shadowW = 30 + pose.crouchDip * 0.5;
         p.noStroke();
         p.fill(10, 10, 15, 60);
         p.ellipse(cx, groundY + 2, shadowW, 6);
-
         p.stroke(220);
         p.strokeWeight(3);
         p.noFill();
@@ -205,6 +221,26 @@ registerSketch('sk2', function(p) {
         p.fill(220);
         p.noStroke();
         p.ellipse(cx, headY, 20, 20);
+    }
+
+    // ★ NEW: ball with seams, highlight, spin
+    function drawBall(x, y, r, spin) {
+        p.push();
+        p.translate(x, y);
+        if (spin) p.rotate(spin);
+        p.noStroke();
+        p.fill(210, 120, 40);
+        p.ellipse(0, 0, r * 2, r * 2);
+        p.stroke(170, 90, 25);
+        p.strokeWeight(1.2);
+        p.noFill();
+        p.line(-r, 0, r, 0);
+        p.arc(0, 0, r * 1.2, r * 2, -90, 90);
+        p.arc(0, 0, r * 1.2, r * 2, 90, 270);
+        p.noStroke();
+        p.fill(240, 160, 70, 80);
+        p.ellipse(-r * 0.3, -r * 0.3, r * 0.7, r * 0.5);
+        p.pop();
     }
 
     p.windowResized = function() { p.resizeCanvas(CANVAS_SIZE, CANVAS_SIZE); };
