@@ -1,5 +1,5 @@
-// Instance-mode sketch for tab 2
-registerSketch('sk2', function(p) {
+// Instance-mode sketch for tab 3
+registerSketch('sk3', function(p) {
     const CANVAS_SIZE = 800;
 
     var W = 800,
@@ -9,47 +9,19 @@ registerSketch('sk2', function(p) {
     var PHASES = ['INHALE', 'HOLD', 'EXHALE', 'HOLD'];
     var COLORS = ['#4FC3F7', '#FFD54F', '#AED581', '#FFD54F'];
 
-    var CHAR_X = 200,
-        FLOOR_Y = 600,
-        HOOP_X = 650,
-        HOOP_Y = 320,
-        RIM_W = 52;
-
     var isPlaying = false;
-    // button positioned to the left of the phase label
-    var btnX = W / 2 - 120 - 50,
-        btnY = 16,
-        btnW = 36,
-        btnH = 28;
-
-    var POSES = {
-        inhaleStart: { headOff: 90, crouchDip: 30, kneeSpread: 18, armRightX: 16, armRightY: 40, armLeftX: -10, armLeftY: 45 },
-        holdStart: { headOff: 130, crouchDip: 0, kneeSpread: 6, armRightX: 14, armRightY: 18, armLeftX: -10, armLeftY: 18 },
-        exhaleStart: { headOff: 126, crouchDip: 0, kneeSpread: 8, armRightX: 14, armRightY: 14, armLeftX: -10, armLeftY: 14 },
-        exhaleRelease: { headOff: 128, crouchDip: 0, kneeSpread: 6, armRightX: 16, armRightY: 8, armLeftX: -10, armLeftY: 10 },
-        exhaleFollow: { headOff: 134, crouchDip: 0, kneeSpread: 2, armRightX: 24, armRightY: -30, armLeftX: -8, armLeftY: 8 },
-        returnStand: { headOff: 130, crouchDip: 0, kneeSpread: 4, armRightX: 14, armRightY: 22, armLeftX: -10, armLeftY: 22 },
-        returnMid: { headOff: 115, crouchDip: 12, kneeSpread: 10, armRightX: 15, armRightY: 30, armLeftX: -10, armLeftY: 32 },
-        returnCrouch: { headOff: 90, crouchDip: 30, kneeSpread: 18, armRightX: 16, armRightY: 40, armLeftX: -10, armLeftY: 45 }
-    };
+    var btnX = W / 2 - 24,
+        btnY = 80,
+        btnW = 48,
+        btnH = 32;
 
     function easeInOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
-
-    function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
-
-    function easeIn(t) { return t * t * t; }
-
-    function easeGravity(t) { return t * t; }
-
-    function lerpPose(a, b, t) { var r = {}; for (var k in a) r[k] = a[k] + (b[k] - a[k]) * t; return r; }
 
     var cycleTime = 0,
         lastMillis = 0;
 
     p.setup = function() {
         p.createCanvas(CANVAS_SIZE, CANVAS_SIZE);
-        p.angleMode(p.DEGREES);
-        p.textFont('monospace');
         lastMillis = p.millis();
     };
 
@@ -68,347 +40,333 @@ registerSketch('sk2', function(p) {
         var now = p.millis();
         var dt = (now - lastMillis) / 1000;
         lastMillis = now;
-
-        if (isPlaying) {
-            cycleTime = (cycleTime + dt) % TOTAL;
-        }
+        if (isPlaying) cycleTime = (cycleTime + dt) % TOTAL;
 
         var phase = Math.floor(cycleTime / PHASE_DUR);
         var t = (cycleTime % PHASE_DUR) / PHASE_DUR;
 
-        p.background(18, 18, 28);
+        p.background(12, 14, 20);
+
+        // water level 0–1
+        var waterLevel = 0;
+        if (phase === 0) waterLevel = easeInOut(t);
+        else if (phase === 1) waterLevel = 1;
+        else if (phase === 2) waterLevel = 1 - easeInOut(t);
+        else waterLevel = 0;
+
+        // ── PHASE LABEL (top center, large) ───────────────────────────────────
+        var col = isPlaying ? p.color(COLORS[phase]) : p.color(70);
+        p.textFont('monospace');
         p.noStroke();
-        p.fill(40, 30, 20);
-        p.rect(0, FLOOR_Y, W, H - FLOOR_Y);
-        p.stroke(50, 38, 25);
-        p.strokeWeight(0.5);
-        for (var i = 0; i < 6; i++) p.line(0, FLOOR_Y + 8 + i * 15, W, FLOOR_Y + 8 + i * 15);
-        p.stroke(80, 60, 30);
-        p.strokeWeight(1.5);
-        p.line(0, FLOOR_Y, W, FLOOR_Y);
-
-        drawHoop();
-        drawUI(phase, t);
-
-        var pose;
-        if (phase === 0) {
-            pose = lerpPose(POSES.inhaleStart, POSES.holdStart, easeInOut(t));
-        } else if (phase === 1) {
-            pose = lerpPose(POSES.holdStart, POSES.exhaleStart, easeInOut(t));
-        } else if (phase === 2) {
-            if (t < 0.25) {
-                pose = lerpPose(POSES.exhaleStart, POSES.exhaleRelease, easeInOut(t / 0.25));
-            } else {
-                var armT = Math.min(easeOut((t - 0.25) / 0.25), 1.0);
-                pose = lerpPose(POSES.exhaleRelease, POSES.exhaleFollow, armT);
-            }
+        p.fill(col);
+        p.textAlign(p.CENTER, p.TOP);
+        p.textSize(28);
+        p.textStyle(p.BOLD);
+        if (isPlaying) {
+            p.text(PHASES[phase], W / 2, 20);
         } else {
-            if (t < 0.25) {
-                pose = lerpPose(POSES.exhaleFollow, POSES.returnStand, easeOut(t / 0.25));
-            } else if (t < 0.45) {
-                pose = POSES.returnStand;
-            } else if (t < 0.70) {
-                var anticipateT = (t - 0.45) / 0.25;
-                pose = lerpPose(POSES.returnStand, POSES.returnMid, anticipateT);
-            } else {
-                var receiveT = (t - 0.70) / 0.30;
-                pose = lerpPose(POSES.returnMid, POSES.returnCrouch, receiveT);
-            }
+            p.fill(70);
+            p.text('READY', W / 2, 20);
         }
 
-        var bx, by, ballSpin = 0;
-        var rimY = HOOP_Y + 5;
-        var netBottomY = HOOP_Y + 50;
-        var floorBallY = FLOOR_Y - 8;
-
-        if (phase === 0) {
-            var et = easeInOut(t);
-            bx = CHAR_X + p.lerp(10, 14, et);
-            by = p.lerp(FLOOR_Y - 8, FLOOR_Y - 80, et);
-        } else if (phase === 1) {
-            bx = CHAR_X + 14;
-            by = FLOOR_Y - 80 + Math.sin(t * Math.PI * 2) * 3;
-        } else if (phase === 2) {
-            var st = easeInOut(t);
-            var sx = CHAR_X + 14,
-                sy = FLOOR_Y - 80;
-            var ex = HOOP_X,
-                ey = rimY;
-            var c1x = sx + 80,
-                c1y = sy - 180;
-            var c2x = ex - 60,
-                c2y = ey - 100;
-            var u = 1 - st;
-            bx = u * u * u * sx + 3 * u * u * st * c1x + 3 * u * st * st * c2x + st * st * st * ex;
-            by = u * u * u * sy + 3 * u * u * st * c1y + 3 * u * st * st * c2y + st * st * st * ey;
-            ballSpin = st * 720;
+        // countdown
+        p.textSize(16);
+        p.textStyle(p.NORMAL);
+        p.fill(isPlaying ? 140 : 50);
+        if (isPlaying) {
+            p.text(Math.ceil(PHASE_DUR * (1 - t)) + 's', W / 2, 55);
         } else {
-            if (t < 0.25) {
-                var dropT = easeGravity(t / 0.25);
-                bx = HOOP_X;
-                by = p.lerp(rimY, netBottomY, dropT);
-            } else if (t < 0.32) {
-                var fallT = easeGravity((t - 0.25) / 0.07);
-                bx = p.lerp(HOOP_X, HOOP_X + 12, fallT);
-                by = p.lerp(netBottomY, floorBallY, fallT);
-            } else if (t < 0.48) {
-                var bt = (t - 0.32) / 0.16;
-                bx = p.lerp(HOOP_X + 12, HOOP_X + 55, bt);
-                by = floorBallY - Math.sin(bt * Math.PI) * 55;
-            } else if (t < 0.58) {
-                var bt2 = (t - 0.48) / 0.10;
-                bx = p.lerp(HOOP_X + 55, HOOP_X + 70, bt2);
-                by = floorBallY - Math.sin(bt2 * Math.PI) * 18;
-            } else {
-                var rollT = easeOut((t - 0.58) / 0.42);
-                bx = p.lerp(HOOP_X + 70, CHAR_X + 10, rollT);
-                by = floorBallY;
-                ballSpin = -rollT * 480;
-            }
+            p.text('--', W / 2, 55);
         }
 
-        drawCharacter(pose);
-        drawBall(bx, by, 14, ballSpin);
+        // ── PLAY / STOP BUTTON ────────────────────────────────────────────────
+        var hovering = p.mouseX >= btnX && p.mouseX <= btnX + btnW &&
+            p.mouseY >= btnY && p.mouseY <= btnY + btnH;
 
-        // SWISH text
-        if (phase === 2 && t > 0.82) {
-            var fadeIn = easeOut(p.constrain(p.map(t, 0.82, 0.90, 0, 1), 0, 1));
-            var fadeOut = t > 0.94 ? easeIn(p.constrain(p.map(t, 0.94, 1.0, 1, 0), 0, 1)) : 1;
-            var alpha = fadeIn * fadeOut * 220;
-            var drift = p.map(t, 0.82, 1.0, 0, -14);
-            p.fill(255, 220, 80, alpha);
+        p.noStroke();
+        p.fill(hovering ? 45 : 28);
+        p.rect(btnX, btnY, btnW, btnH, 6);
+        p.stroke(hovering ? 100 : 50);
+        p.strokeWeight(1);
+        p.noFill();
+        p.rect(btnX, btnY, btnW, btnH, 6);
+
+        if (isPlaying) {
             p.noStroke();
-            p.textSize(18);
-            p.textStyle(p.BOLD);
-            p.textAlign(p.CENTER);
-            p.text('SWISH', HOOP_X - 10, HOOP_Y - 40 + drift);
+            p.fill(200);
+            p.rect(btnX + btnW / 2 - 5, btnY + btnH / 2 - 5, 10, 10, 1);
+        } else {
+            p.noStroke();
+            p.fill(200);
+            var bcx = btnX + btnW / 2,
+                bcy = btnY + btnH / 2;
+            p.triangle(bcx - 5, bcy - 8, bcx - 5, bcy + 8, bcx + 8, bcy);
         }
 
-        // Net ripple
-        if ((phase === 2 && t > 0.92) || (phase === 3 && t < 0.28)) {
-            var rippleT = phase === 2 ?
-                p.map(t, 0.92, 1.0, 0, 0.1) :
-                p.map(t, 0, 0.28, 0.1, 1.0);
-            drawNetRipple(rippleT);
+        if (hovering) p.cursor(p.HAND);
+        else p.cursor(p.ARROW);
+
+        // ── TRACHEA ───────────────────────────────────────────────────────────
+        var tracheaTop = 170;
+        var tracheaBot = 260;
+        var splitY = 270;
+
+        // trachea tube with rings
+        p.stroke(160, 140, 140);
+        p.strokeWeight(2);
+        p.noFill();
+        // left wall
+        p.line(W / 2 - 12, tracheaTop, W / 2 - 12, tracheaBot);
+        // right wall
+        p.line(W / 2 + 12, tracheaTop, W / 2 + 12, tracheaBot);
+        // cartilage rings
+        p.stroke(140, 120, 120);
+        p.strokeWeight(1.5);
+        for (var ring = 0; ring < 6; ring++) {
+            var ry = tracheaTop + 8 + ring * 14;
+            p.arc(W / 2, ry, 24, 6, 0, 180);
+        }
+
+        // bronchi splitting
+        p.stroke(160, 140, 140);
+        p.strokeWeight(2);
+        p.noFill();
+        // left bronchus
+        p.bezier(W / 2 - 12, tracheaBot, W / 2 - 30, splitY, W / 2 - 80, splitY + 10, W / 2 - 100, splitY + 30);
+        p.bezier(W / 2 + 2, tracheaBot + 4, W / 2 - 15, splitY + 5, W / 2 - 60, splitY + 18, W / 2 - 80, splitY + 38);
+        // right bronchus
+        p.bezier(W / 2 + 12, tracheaBot, W / 2 + 30, splitY, W / 2 + 80, splitY + 10, W / 2 + 100, splitY + 30);
+        p.bezier(W / 2 - 2, tracheaBot + 4, W / 2 + 15, splitY + 5, W / 2 + 60, splitY + 18, W / 2 + 80, splitY + 38);
+
+        // ── DRAW LUNGS ────────────────────────────────────────────────────────
+        drawRealisticLung(W / 2 - 60, waterLevel, -1, phase, t);
+        drawRealisticLung(W / 2 + 60, waterLevel, 1, phase, t);
+
+        // ── CAPACITY READOUT ──────────────────────────────────────────────────
+        if (isPlaying) {
+            p.fill(80);
+            p.noStroke();
+            p.textAlign(p.CENTER, p.TOP);
+            p.textSize(12);
+            p.textStyle(p.NORMAL);
+            p.text(Math.round(waterLevel * 100) + '% lung capacity', W / 2, 640);
         }
 
         // idle message
         if (!isPlaying && cycleTime === 0) {
-            p.fill(120);
+            p.fill(80);
             p.noStroke();
             p.textAlign(p.CENTER, p.CENTER);
-            p.textSize(16);
+            p.textSize(15);
             p.textStyle(p.NORMAL);
-            p.text('Press play to begin breathing', W / 2, FLOOR_Y / 2);
+            p.text('Press play to begin breathing', W / 2, 660);
         }
 
-        p.fill(80);
+        // footer
+        p.fill(50);
         p.noStroke();
         p.textAlign(p.CENTER, p.BOTTOM);
-        p.textSize(11);
+        p.textSize(10);
         p.textStyle(p.NORMAL);
+        p.text('BOX BREATHING \u00B7 6s PER PHASE \u00B7 24s CYCLE', W / 2, H - 10);
         p.noFill();
         p.stroke(0);
         p.strokeWeight(1);
         p.rect(0, 0, p.width - 1, p.height - 1);
     };
 
-    function drawUI(phase, t) {
-        var col = isPlaying ? p.color(COLORS[phase]) : p.color(80);
+    function drawRealisticLung(cx, waterLevel, side, phase, t) {
+        var topY = 260;
+        var botY = 610;
+        var lh = botY - topY;
 
-        // ── PLAY / STOP BUTTON (left of phase label) ──────────────────────────
-        var hovering = p.mouseX >= btnX && p.mouseX <= btnX + btnW &&
-            p.mouseY >= btnY && p.mouseY <= btnY + btnH;
+        // lung dimensions vary slightly with breathing
+        var breathScale = 1.0 + waterLevel * 0.08; // lungs expand when full
+        var lw = 130 * breathScale;
 
-        p.noStroke();
-        p.fill(hovering ? 55 : 35);
-        p.rect(btnX, btnY, btnW, btnH, 4);
+        // ── LUNG SHAPE POINTS ─────────────────────────────────────────────────
+        // Using multiple bezier curves for realistic lung shape
+        // Left lung has cardiac notch (indentation for heart)
 
-        p.stroke(hovering ? 120 : 70);
-        p.strokeWeight(1);
-        p.noFill();
-        p.rect(btnX, btnY, btnW, btnH, 4);
+        var outerTop = cx + side * lw * 0.25;
+        var outerMid = cx + side * lw * 0.52;
+        var outerBot = cx + side * lw * 0.35;
+        var innerTop = cx - side * lw * 0.05;
+        var innerMid = cx - side * lw * 0.08;
+        var innerBot = cx - side * lw * 0.02;
 
-        if (isPlaying) {
-            // stop icon: square
+        // ── WATER FILL ────────────────────────────────────────────────────────
+        if (waterLevel > 0.005) {
+            var waterTopY = botY - lh * waterLevel;
+            var waveTime = p.millis() * 0.003;
+
+            // draw water as layered horizontal slices clipped to lung width
             p.noStroke();
-            p.fill(220);
-            var sq = 10;
-            p.rect(btnX + btnW / 2 - sq / 2, btnY + btnH / 2 - sq / 2, sq, sq, 1);
-        } else {
-            // play icon: triangle
-            p.noStroke();
-            p.fill(220);
-            var cx = btnX + btnW / 2;
-            var cy = btnY + btnH / 2;
-            p.triangle(cx - 4, cy - 7, cx - 4, cy + 7, cx + 7, cy);
-        }
+            var slices = 40;
+            for (var s = 0; s < slices; s++) {
+                var sliceTop = waterTopY + (botY - waterTopY) * (s / slices);
+                var sliceBot = waterTopY + (botY - waterTopY) * ((s + 1) / slices);
+                var sliceMid = (sliceTop + sliceBot) / 2;
 
-        // ── PHASE LABEL (centered, same position as before) ───────────────────
-        p.noStroke();
-        p.fill(col);
-        p.textAlign(p.CENTER, p.TOP);
-        p.textSize(22);
-        p.textStyle(p.BOLD);
-        if (isPlaying) {
-            p.text(PHASES[phase], W / 2, 18);
-        } else {
-            p.fill(80);
-            p.text('READY', W / 2, 18);
-        }
+                // figure out lung width at this height
+                var frac = (sliceMid - topY) / lh;
+                frac = p.constrain(frac, 0, 1);
 
-        // countdown
-        p.textSize(14);
-        p.textStyle(p.NORMAL);
-        p.fill(160);
-        if (isPlaying) {
-            p.text(Math.ceil(PHASE_DUR * (1 - t)) + 's', W / 2, 46);
-        } else {
-            p.text('--', W / 2, 46);
-        }
+                var widthAtHeight;
+                if (frac < 0.08) {
+                    widthAtHeight = p.lerp(0.15, 0.45, frac / 0.08);
+                } else if (frac < 0.25) {
+                    widthAtHeight = p.lerp(0.45, 0.85, (frac - 0.08) / 0.17);
+                } else if (frac < 0.55) {
+                    widthAtHeight = p.lerp(0.85, 1.0, (frac - 0.25) / 0.3);
+                } else if (frac < 0.8) {
+                    widthAtHeight = p.lerp(1.0, 0.9, (frac - 0.55) / 0.25);
+                } else {
+                    widthAtHeight = p.lerp(0.9, 0.4, (frac - 0.8) / 0.2);
+                }
 
-        // ── PROGRESS BAR (same position and width as original) ────────────────
-        p.noStroke();
-        p.fill(35);
-        p.rect(W / 2 - 120, 66, 240, 8, 4);
-        if (isPlaying) {
-            p.fill(col);
-            p.rect(W / 2 - 120, 66, 240 * t, 8, 4);
-        }
+                // cardiac notch on left lung (side === -1)
+                if (side === -1 && frac > 0.55 && frac < 0.8) {
+                    var notchDepth = Math.sin((frac - 0.55) / 0.25 * Math.PI) * 0.15;
+                    // reduce inner edge
+                    var innerEdge = cx + lw * 0.08 * widthAtHeight - lw * notchDepth;
+                    var outerEdge = cx - lw * 0.52 * widthAtHeight;
+                    // water color
+                    var depth = s / slices;
+                    p.fill(
+                        p.lerp(60, 30, depth),
+                        p.lerp(150, 100, depth),
+                        p.lerp(220, 180, depth),
+                        p.lerp(120, 180, depth)
+                    );
+                    p.rect(outerEdge, sliceTop, innerEdge - outerEdge, sliceBot - sliceTop);
+                    continue;
+                }
 
-        // ── PHASE DOTS (same position as original) ────────────────────────────
-        for (var i = 0; i < 4; i++) {
-            var a = i === phase && isPlaying;
-            p.fill(a ? col : p.color(55));
-            p.noStroke();
-            p.ellipse(W / 2 - 45 + i * 30, 90, a ? 11 : 8, a ? 11 : 8);
-            if (a) {
-                p.fill(120);
-                p.textSize(8);
-                p.textAlign(p.CENTER, p.TOP);
-                p.text(PHASES[i], W / 2 - 45 + i * 30, 99);
+                var halfW = lw * 0.5 * widthAtHeight;
+                var left = cx - halfW;
+                var right = cx + halfW;
+
+                // shift inner edge slightly
+                if (side === -1) {
+                    right = cx + halfW * 0.18;
+                    left = cx - halfW;
+                } else {
+                    left = cx - halfW * 0.18;
+                    right = cx + halfW;
+                }
+
+                var depth2 = s / slices;
+                p.fill(
+                    p.lerp(60, 30, depth2),
+                    p.lerp(150, 100, depth2),
+                    p.lerp(220, 180, depth2),
+                    p.lerp(120, 180, depth2)
+                );
+                p.rect(left, sliceTop, right - left, sliceBot - sliceTop);
             }
-        }
 
-        if (hovering) p.cursor(p.HAND);
-        else p.cursor(p.ARROW);
-    }
-
-    function drawHoop() {
-        var hx = HOOP_X,
-            hy = HOOP_Y,
-            rw = RIM_W;
-        p.stroke(110);
-        p.strokeWeight(5);
-        p.line(hx + rw / 2 + 14, hy + 28, hx + rw / 2 + 14, FLOOR_Y);
-        p.fill(25, 25, 45);
-        p.stroke(160);
-        p.strokeWeight(3);
-        p.rect(hx + rw / 2 + 8, hy - 48, 12, 80, 2);
-        p.noFill();
-        p.stroke(200, 50, 50);
-        p.strokeWeight(1.5);
-        p.rect(hx + rw / 2 + 9, hy - 28, 10, 20);
-        p.stroke(210, 70, 30);
-        p.strokeWeight(4);
-        p.line(hx - rw / 2, hy, hx + rw / 2, hy);
-        drawNet();
-    }
-
-    function drawNet() {
-        var hx = HOOP_X,
-            hy = HOOP_Y,
-            rw = RIM_W;
-        var netDepth = 42,
-            bottomW = rw * 0.4;
-        p.stroke(190, 190, 190, 130);
-        p.strokeWeight(1);
-        for (var i = 0; i <= 5; i++) {
-            var topX = p.lerp(hx - rw / 2, hx + rw / 2, i / 5);
-            var botX = p.lerp(hx - bottomW / 2, hx + bottomW / 2, i / 5);
-            var midX = (topX + botX) / 2;
+            // wave line at water surface
+            p.stroke(90, 170, 230, 150);
+            p.strokeWeight(1.5);
             p.noFill();
+            var waveFrac = (waterTopY - topY) / lh;
+            waveFrac = p.constrain(waveFrac, 0, 1);
+            var ww;
+            if (waveFrac < 0.25) ww = p.lerp(0.3, 0.85, waveFrac / 0.25);
+            else if (waveFrac < 0.55) ww = p.lerp(0.85, 1.0, (waveFrac - 0.25) / 0.3);
+            else ww = p.lerp(1.0, 0.5, (waveFrac - 0.55) / 0.45);
+
+            var waveHalfW = lw * 0.45 * ww;
             p.beginShape();
-            p.vertex(topX, hy + 2);
-            p.quadraticVertex(midX, hy + netDepth * 0.5, botX, hy + netDepth);
+            for (var wx = -waveHalfW; wx <= waveHalfW; wx += 3) {
+                var wy = waterTopY + Math.sin(wx * 0.06 + waveTime + side) * 2.5;
+                p.vertex(cx + wx * (side === -1 ? 1 : 1), wy);
+            }
             p.endShape();
         }
-        for (var j = 1; j <= 3; j++) {
-            var frac = j / 4,
-                ny = hy + 2 + netDepth * frac,
-                shrink = (rw - bottomW) / 2 * frac;
-            p.line(hx - rw / 2 + shrink, ny, hx + rw / 2 - shrink, ny);
-        }
-    }
 
-    function drawNetRipple(rippleT) {
-        var hx = HOOP_X,
-            hy = HOOP_Y,
-            rw = RIM_W;
-        var netDepth = 42,
-            bottomW = rw * 0.4;
-        var rippleAmt = Math.sin(rippleT * Math.PI) * 6;
-        p.stroke(210, 210, 210, 160);
+        // ── LUNG OUTLINE ──────────────────────────────────────────────────────
+        p.noFill();
+        p.stroke(150, 130, 130, 200);
+        p.strokeWeight(2);
+
+        p.beginShape();
+        // top (narrow, near trachea)
+        p.vertex(innerTop, topY);
+        // curve outward to apex
+        p.bezierVertex(
+            cx + side * lw * 0.1, topY - 15,
+            cx + side * lw * 0.35, topY - 8,
+            outerTop, topY + lh * 0.08
+        );
+        // outer edge widens
+        p.bezierVertex(
+            cx + side * lw * 0.45, topY + lh * 0.2,
+            cx + side * lw * 0.52, topY + lh * 0.35,
+            outerMid, topY + lh * 0.5
+        );
+        // outer edge continues down
+        p.bezierVertex(
+            cx + side * lw * 0.52, topY + lh * 0.65,
+            cx + side * lw * 0.48, topY + lh * 0.82,
+            outerBot, botY
+        );
+        // bottom curve
+        p.bezierVertex(
+            cx + side * lw * 0.15, botY + 12,
+            cx - side * lw * 0.02, botY + 8,
+            innerBot, botY - lh * 0.08
+        );
+
+        // inner edge — cardiac notch on left lung
+        if (side === -1) {
+            // inner edge goes up with notch
+            p.bezierVertex(
+                cx + lw * 0.04, topY + lh * 0.75,
+                cx + lw * 0.12, topY + lh * 0.65,
+                cx + lw * 0.08, topY + lh * 0.55
+            );
+            // notch curves back in
+            p.bezierVertex(
+                cx + lw * 0.02, topY + lh * 0.48,
+                cx - lw * 0.02, topY + lh * 0.35,
+                innerMid, topY + lh * 0.25
+            );
+        } else {
+            // right lung — smooth inner edge
+            p.bezierVertex(
+                cx - lw * 0.06, topY + lh * 0.7,
+                cx - lw * 0.08, topY + lh * 0.45,
+                innerMid, topY + lh * 0.25
+            );
+        }
+
+        // back up to top
+        p.bezierVertex(
+            cx - side * lw * 0.06, topY + lh * 0.12,
+            cx - side * lw * 0.04, topY + 5,
+            innerTop, topY
+        );
+        p.endShape(p.CLOSE);
+
+        // ── BRONCHIOLE BRANCHES (subtle internal lines) ───────────────────────
+        p.stroke(130, 115, 115, 60);
         p.strokeWeight(1);
-        for (var i = 0; i <= 5; i++) {
-            var topX = p.lerp(hx - rw / 2, hx + rw / 2, i / 5);
-            var botX = p.lerp(hx - bottomW / 2, hx + bottomW / 2, i / 5);
-            var wave = Math.sin(i * 1.5 + rippleT * 10) * rippleAmt;
-            var midX = (topX + botX) / 2 + wave;
-            var midY = hy + netDepth * 0.5 + Math.abs(wave) * 0.4;
-            p.noFill();
-            p.beginShape();
-            p.vertex(topX, hy + 2);
-            p.quadraticVertex(midX, midY, botX, hy + netDepth + rippleAmt * 0.25);
-            p.endShape();
-        }
-    }
-
-    function drawCharacter(pose) {
-        var cx = CHAR_X,
-            groundY = FLOOR_Y;
-        var headY = groundY - pose.headOff + pose.crouchDip;
-        var bodyTopY = headY + 14,
-            bodyBotY = groundY - 10;
-        var shadowW = 30 + pose.crouchDip * 0.5;
-        p.noStroke();
-        p.fill(10, 10, 15, 60);
-        p.ellipse(cx, groundY + 2, shadowW, 6);
-        p.stroke(220);
-        p.strokeWeight(3);
         p.noFill();
-        p.line(cx, bodyTopY, cx, bodyBotY);
-        var kneeY = bodyBotY + (groundY - bodyBotY) * 0.5,
-            ks = pose.kneeSpread;
-        p.line(cx, bodyBotY, cx - ks, kneeY);
-        p.line(cx - ks, kneeY, cx - 8, groundY);
-        p.line(cx, bodyBotY, cx + ks, kneeY);
-        p.line(cx + ks, kneeY, cx + 8, groundY);
-        var shY = bodyTopY + 10;
-        p.line(cx, shY, cx + pose.armRightX, shY + pose.armRightY);
-        p.line(cx, shY, cx + pose.armLeftX, shY + pose.armLeftY);
-        p.fill(220);
-        p.noStroke();
-        p.ellipse(cx, headY, 20, 20);
-    }
 
-    function drawBall(x, y, r, spin) {
-        p.push();
-        p.translate(x, y);
-        if (spin) p.rotate(spin);
-        p.noStroke();
-        p.fill(210, 120, 40);
-        p.ellipse(0, 0, r * 2, r * 2);
-        p.stroke(170, 90, 25);
-        p.strokeWeight(1.2);
-        p.noFill();
-        p.line(-r, 0, r, 0);
-        p.arc(0, 0, r * 1.2, r * 2, -90, 90);
-        p.arc(0, 0, r * 1.2, r * 2, 90, 270);
-        p.noStroke();
-        p.fill(240, 160, 70, 80);
-        p.ellipse(-r * 0.3, -r * 0.3, r * 0.7, r * 0.5);
-        p.pop();
+        // main bronchus line inside lung
+        var branchStartX = cx - side * lw * 0.02;
+        var branchStartY = topY + lh * 0.1;
+        var branchMidX = cx + side * lw * 0.1;
+        var branchMidY = topY + lh * 0.35;
+
+        p.bezier(branchStartX, branchStartY, cx, topY + lh * 0.18, branchMidX - side * 10, branchMidY - 20, branchMidX, branchMidY);
+
+        // smaller branches
+        p.bezier(branchMidX, branchMidY, branchMidX + side * 15, branchMidY + 20, cx + side * lw * 0.3, branchMidY + 40, cx + side * lw * 0.32, branchMidY + 60);
+        p.bezier(branchMidX, branchMidY, branchMidX + side * 5, branchMidY + 30, cx + side * lw * 0.15, branchMidY + 70, cx + side * lw * 0.18, branchMidY + 100);
+        p.bezier(branchMidX, branchMidY, branchMidX - side * 5, branchMidY + 25, cx - side * lw * 0.02, branchMidY + 60, cx, branchMidY + 85);
     }
 
     p.windowResized = function() { p.resizeCanvas(CANVAS_SIZE, CANVAS_SIZE); };
