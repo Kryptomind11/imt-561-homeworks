@@ -13,6 +13,7 @@ registerSketch('sk2', function(p) {
     // 'setup' | 'playing' | 'done'
     var appState = 'setup';
     var isPlaying = false;
+    var showPauseMenu = false;
 
     var phaseDurSecs = 4;
     var sessionDurSecs = 300;
@@ -22,11 +23,16 @@ registerSketch('sk2', function(p) {
         { label: 'SESSION LENGTH (MIN)', placeholder: '5', value: '', focused: false }
     ];
 
+    var pauseInputs = [
+        { label: 'SESSION LENGTH (MIN)', placeholder: '5', value: '', focused: false },
+        { label: 'SECONDS PER PHASE',    placeholder: '4', value: '', focused: false }
+    ];
+
     var sessionElapsed = 0;
     var cycleCount = 0;
     var confetti = [];
 
-    // Pause button (during play — top left)
+    // Stop button (during play — top left)
     var btnX = 20, btnY = 16, btnW = 36, btnH = 28;
 
     var POSES = {
@@ -72,6 +78,36 @@ registerSketch('sk2', function(p) {
         appState       = 'playing';
     }
 
+    function openPauseMenu() {
+        isPlaying = false;
+        showPauseMenu = true;
+        var sdMin = sessionDurSecs / 60;
+        pauseInputs[0].value = (sdMin % 1 === 0) ? String(sdMin) : sdMin.toFixed(1);
+        pauseInputs[1].value = String(phaseDurSecs);
+        pauseInputs.forEach(function(f) { f.focused = false; });
+    }
+
+    function applyAndContinue() {
+        var sd = parseFloat(pauseInputs[0].value);
+        var pd = parseFloat(pauseInputs[1].value);
+        if (!isNaN(sd) && sd >= 0.1) sessionDurSecs = sd * 60;
+        if (!isNaN(pd) && pd >= 1) { phaseDurSecs = pd; PHASE_DUR = pd; TOTAL = pd * 4; }
+        showPauseMenu = false;
+        isPlaying = true;
+        lastMillis = p.millis();
+    }
+
+    function applyAndReset() {
+        var sd = parseFloat(pauseInputs[0].value);
+        var pd = parseFloat(pauseInputs[1].value);
+        if (!isNaN(sd) && sd >= 0.1) sessionDurSecs = sd * 60;
+        if (!isNaN(pd) && pd >= 1) { phaseDurSecs = pd; PHASE_DUR = pd; TOTAL = pd * 4; }
+        sessionElapsed = 0; cycleCount = 0; cycleTime = 0;
+        showPauseMenu = false;
+        isPlaying = true;
+        lastMillis = p.millis();
+    }
+
     function initConfetti() {
         confetti = [];
         for (var i = 0; i < 90; i++) {
@@ -96,6 +132,10 @@ registerSketch('sk2', function(p) {
     function getSetupBtnRect()  { return { x: W/2-115, y: 596, w: 230, h: 60 }; }
     function getAgainBtnRect()  { return { x: W/2-120, y: 636, w: 240, h: 60 }; }
 
+    function getPauseInputRect(i) { return { x: W/2-160, y: 230+i*110, w: 320, h: 52 }; }
+    function getPauseContinueBtnRect() { return { x: W/2-165, y: 470, w: 155, h: 54 }; }
+    function getPauseResetBtnRect()    { return { x: W/2+10,  y: 470, w: 155, h: 54 }; }
+
     p.mousePressed = function() {
         if (appState === 'setup') {
             var hit = false;
@@ -113,9 +153,26 @@ registerSketch('sk2', function(p) {
             if (p.mouseX>=sb.x && p.mouseX<=sb.x+sb.w && p.mouseY>=sb.y && p.mouseY<=sb.y+sb.h) startSession();
 
         } else if (appState === 'playing') {
-            if (p.mouseX>=btnX && p.mouseX<=btnX+btnW && p.mouseY>=btnY && p.mouseY<=btnY+btnH) {
-                isPlaying = !isPlaying;
-                if (isPlaying) lastMillis = p.millis();
+            if (showPauseMenu) {
+                var hit = false;
+                for (var i = 0; i < pauseInputs.length; i++) {
+                    var r = getPauseInputRect(i);
+                    if (p.mouseX>=r.x && p.mouseX<=r.x+r.w && p.mouseY>=r.y && p.mouseY<=r.y+r.h) {
+                        pauseInputs.forEach(function(f) { f.focused = false; });
+                        pauseInputs[i].focused = true;
+                        hit = true;
+                        return;
+                    }
+                }
+                if (!hit) pauseInputs.forEach(function(f) { f.focused = false; });
+                var cb = getPauseContinueBtnRect();
+                if (p.mouseX>=cb.x && p.mouseX<=cb.x+cb.w && p.mouseY>=cb.y && p.mouseY<=cb.y+cb.h) { applyAndContinue(); return; }
+                var rb = getPauseResetBtnRect();
+                if (p.mouseX>=rb.x && p.mouseX<=rb.x+rb.w && p.mouseY>=rb.y && p.mouseY<=rb.y+rb.h) { applyAndReset(); return; }
+            } else {
+                if (p.mouseX>=btnX && p.mouseX<=btnX+btnW && p.mouseY>=btnY && p.mouseY<=btnY+btnH) {
+                    openPauseMenu();
+                }
             }
 
         } else if (appState === 'done') {
@@ -123,6 +180,7 @@ registerSketch('sk2', function(p) {
             if (p.mouseX>=ab.x && p.mouseX<=ab.x+ab.w && p.mouseY>=ab.y && p.mouseY<=ab.y+ab.h) {
                 appState = 'setup';
                 isPlaying = false;
+                showPauseMenu = false;
                 cycleTime = 0;
                 sessionElapsed = 0;
                 cycleCount = 0;
@@ -132,6 +190,16 @@ registerSketch('sk2', function(p) {
     };
 
     p.keyPressed = function() {
+        if (showPauseMenu) {
+            var focused = null;
+            for (var i = 0; i < pauseInputs.length; i++) if (pauseInputs[i].focused) { focused = pauseInputs[i]; break; }
+            if (focused) {
+                if (p.keyCode === p.BACKSPACE) { focused.value = focused.value.slice(0, -1); return false; }
+                if (p.key >= '0' && p.key <= '9' && focused.value.length < 5) { focused.value += p.key; }
+                else if (p.key === '.' && focused.value.indexOf('.') === -1 && focused.value.length < 4) { focused.value += '.'; }
+            }
+            return false;
+        }
         var focused = null;
         for (var i = 0; i < inputs.length; i++) if (inputs[i].focused) { focused = inputs[i]; break; }
         if (!focused) return;
@@ -164,6 +232,7 @@ registerSketch('sk2', function(p) {
 
         var phase = Math.floor(cycleTime / PHASE_DUR);
         var t     = (cycleTime % PHASE_DUR) / PHASE_DUR;
+        var phaseCol = p.color(COLORS[phase]);
 
         // Background + floor
         p.background(18, 18, 28);
@@ -175,7 +244,7 @@ registerSketch('sk2', function(p) {
         p.stroke(80, 60, 30); p.strokeWeight(1.5);
         p.line(0, FLOOR_Y, W, FLOOR_Y);
 
-        drawHoop();
+        drawHoop(phaseCol);
         drawUI(phase, t);
 
         // Pose
@@ -237,7 +306,7 @@ registerSketch('sk2', function(p) {
             }
         }
 
-        drawCharacter(pose);
+        drawCharacter(pose, phaseCol);
         drawBall(bx, by, 14, ballSpin);
 
         if (phase === 2 && t > 0.82) {
@@ -255,21 +324,20 @@ registerSketch('sk2', function(p) {
 
         p.noFill(); p.stroke(0); p.strokeWeight(1);
         p.rect(0, 0, p.width-1, p.height-1);
+
+        if (showPauseMenu) drawPauseMenu();
     };
 
     // ── SETUP SCREEN ──────────────────────────────────────────────────────────
     function drawSetupScreen() {
         p.background(18, 18, 28);
 
-        // Top accent strip
         p.noStroke();
         p.fill(79, 195, 247, 50);
         p.rect(0, 0, W, 5);
 
-        // Spinning basketball (decorative)
         drawBall(W/2, 104, 42, p.millis()/28);
 
-        // Title
         p.noStroke();
         p.fill(255);
         p.textAlign(p.CENTER, p.CENTER);
@@ -277,58 +345,50 @@ registerSketch('sk2', function(p) {
         p.textStyle(p.BOLD);
         p.text('BOX BREATHING', W/2, 186);
 
-        p.fill(90);
+        p.fill(160);
         p.textSize(16);
         p.textStyle(p.NORMAL);
         p.text('inhale  ·  hold  ·  exhale  ·  hold', W/2, 222);
 
-        // Divider
         p.stroke(38);
         p.strokeWeight(1);
         p.line(W/2-170, 248, W/2+170, 248);
 
-        // Input fields
         for (var i = 0; i < inputs.length; i++) {
             var r   = getInputRect(i);
             var inp = inputs[i];
             var foc = inp.focused;
 
-            // Label
             p.noStroke();
-            p.fill(foc ? 160 : 110);
+            p.fill(foc ? 200 : 155);
             p.textSize(12);
             p.textStyle(p.NORMAL);
             p.textAlign(p.LEFT, p.BOTTOM);
             p.text(inp.label, r.x, r.y-8);
 
-            // Box background
             p.noStroke();
             p.fill(foc ? 28 : 20);
             p.rect(r.x, r.y, r.w, r.h, 10);
 
-            // Box border
             p.stroke(foc ? '#4FC3F7' : 48);
             p.strokeWeight(foc ? 2 : 1);
             p.noFill();
             p.rect(r.x, r.y, r.w, r.h, 10);
 
-            // Value text
             var display = inp.value !== '' ? inp.value : inp.placeholder;
             p.noStroke();
-            p.fill(inp.value !== '' ? 240 : 65);
+            p.fill(inp.value !== '' ? 240 : 100);
             p.textSize(28);
             p.textStyle(p.BOLD);
             p.textAlign(p.LEFT, p.CENTER);
             p.text(display, r.x+16, r.y+r.h/2);
 
-            // Unit hint
-            p.fill(55);
+            p.fill(100);
             p.textSize(14);
             p.textStyle(p.NORMAL);
             p.textAlign(p.RIGHT, p.CENTER);
             p.text(i===0 ? 'sec' : 'min', r.x+r.w-14, r.y+r.h/2);
 
-            // Blinking cursor
             if (foc && Math.floor(p.millis()/520)%2===0) {
                 p.textSize(28);
                 p.textStyle(p.BOLD);
@@ -340,7 +400,6 @@ registerSketch('sk2', function(p) {
             }
         }
 
-        // Start button
         var sb  = getSetupBtnRect();
         var hov = p.mouseX>=sb.x && p.mouseX<=sb.x+sb.w && p.mouseY>=sb.y && p.mouseY<=sb.y+sb.h;
         p.noStroke();
@@ -364,7 +423,6 @@ registerSketch('sk2', function(p) {
     function drawDoneScreen() {
         p.background(18, 18, 28);
 
-        // Confetti
         for (var i = 0; i < confetti.length; i++) {
             var c = confetti[i];
             c.x  += c.vx;
@@ -380,7 +438,6 @@ registerSketch('sk2', function(p) {
             p.pop();
         }
 
-        // Radial glow
         var pulse = (Math.sin(p.millis()/480)+1)/2;
         for (var rad = 220; rad > 0; rad -= 28) {
             p.noStroke();
@@ -388,10 +445,8 @@ registerSketch('sk2', function(p) {
             p.ellipse(W/2, H/2-40, rad*2, rad*2);
         }
 
-        // Animated star
         drawStar(W/2, 194, 30, 64, 10);
 
-        // Headline
         p.noStroke();
         var glow = p.map(pulse, 0, 1, 210, 255);
         p.fill(255, glow, 45);
@@ -400,12 +455,11 @@ registerSketch('sk2', function(p) {
         p.textStyle(p.BOLD);
         p.text('GREAT JOB!', W/2, 336);
 
-        p.fill(170);
+        p.fill(200);
         p.textSize(20);
         p.textStyle(p.NORMAL);
         p.text('You crushed your meditation session!', W/2, 394);
 
-        // Stats card
         p.noStroke();
         p.fill(23, 23, 34);
         p.rect(W/2-185, 420, 370, 120, 16);
@@ -421,20 +475,18 @@ registerSketch('sk2', function(p) {
         p.textAlign(p.CENTER, p.CENTER);
         p.text(cycleCount + (cycleCount === 1 ? ' shot made!' : ' shots made!'), W/2, 472);
 
-        p.fill(95);
+        p.fill(160);
         p.textSize(15);
         p.textStyle(p.NORMAL);
         p.text(cycleCount + ' full breathing cycle' + (cycleCount!==1?'s':'') + ' completed', W/2, 516);
 
-        // Session summary line
         var mD = Math.floor(sessionDurSecs/60);
         var sD = Math.round(sessionDurSecs % 60);
-        p.fill(70);
+        p.fill(120);
         p.textSize(13);
         p.textAlign(p.CENTER, p.CENTER);
         p.text(mD + 'm' + (sD>0?' '+sD+'s':'') + ' session  ·  ' + phaseDurSecs + 's per phase', W/2, 558);
 
-        // Meditate again button
         var ab  = getAgainBtnRect();
         var hov = p.mouseX>=ab.x && p.mouseX<=ab.x+ab.w && p.mouseY>=ab.y && p.mouseY<=ab.y+ab.h;
         p.noStroke();
@@ -467,11 +519,126 @@ registerSketch('sk2', function(p) {
         p.endShape(p.CLOSE);
     }
 
-    // ── PLAYING UI (bigger phase bar + labels) ────────────────────────────────
-    function drawUI(phase, t) {
-        var col = isPlaying ? p.color(COLORS[phase]) : p.color(75);
+    // ── PAUSE MENU OVERLAY ────────────────────────────────────────────────────
+    function drawPauseMenu() {
+        // Dim overlay
+        p.noStroke();
+        p.fill(0, 0, 0, 175);
+        p.rect(0, 0, W, H);
 
-        // Pause / resume button
+        // Card
+        var cardX = W/2-190, cardY = 140, cardW = 380, cardH = 390;
+        p.noStroke();
+        p.fill(22, 22, 35);
+        p.rect(cardX, cardY, cardW, cardH, 18);
+        p.stroke(70);
+        p.strokeWeight(1.5);
+        p.noFill();
+        p.rect(cardX, cardY, cardW, cardH, 18);
+
+        // Title
+        p.noStroke();
+        p.fill(255);
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textSize(28);
+        p.textStyle(p.BOLD);
+        p.text('PAUSED', W/2, cardY+40);
+
+        p.stroke(50);
+        p.strokeWeight(1);
+        p.line(cardX+24, cardY+64, cardX+cardW-24, cardY+64);
+
+        // Inputs
+        for (var i = 0; i < pauseInputs.length; i++) {
+            var r   = getPauseInputRect(i);
+            var inp = pauseInputs[i];
+            var foc = inp.focused;
+
+            p.noStroke();
+            p.fill(foc ? 220 : 170);
+            p.textSize(11);
+            p.textStyle(p.NORMAL);
+            p.textAlign(p.LEFT, p.BOTTOM);
+            p.text(inp.label, r.x, r.y-7);
+
+            p.noStroke();
+            p.fill(foc ? 30 : 22);
+            p.rect(r.x, r.y, r.w, r.h, 8);
+
+            p.stroke(foc ? '#4FC3F7' : 60);
+            p.strokeWeight(foc ? 2 : 1);
+            p.noFill();
+            p.rect(r.x, r.y, r.w, r.h, 8);
+
+            var display = inp.value !== '' ? inp.value : inp.placeholder;
+            p.noStroke();
+            p.fill(inp.value !== '' ? 240 : 90);
+            p.textSize(24);
+            p.textStyle(p.BOLD);
+            p.textAlign(p.LEFT, p.CENTER);
+            p.text(display, r.x+14, r.y+r.h/2);
+
+            p.fill(90);
+            p.textSize(13);
+            p.textStyle(p.NORMAL);
+            p.textAlign(p.RIGHT, p.CENTER);
+            p.text(i===0 ? 'min' : 'sec', r.x+r.w-12, r.y+r.h/2);
+
+            if (foc && Math.floor(p.millis()/520)%2===0) {
+                p.textSize(24);
+                p.textStyle(p.BOLD);
+                p.textAlign(p.LEFT, p.CENTER);
+                var tw = p.textWidth(inp.value !== '' ? inp.value : '');
+                p.stroke(190);
+                p.strokeWeight(2);
+                p.line(r.x+16+tw, r.y+9, r.x+16+tw, r.y+r.h-9);
+            }
+        }
+
+        // Continue button
+        var cb  = getPauseContinueBtnRect();
+        var hc  = p.mouseX>=cb.x && p.mouseX<=cb.x+cb.w && p.mouseY>=cb.y && p.mouseY<=cb.y+cb.h;
+        p.noStroke();
+        p.fill(hc ? 55 : 38, hc ? 175 : 145, hc ? 55 : 38);
+        p.rect(cb.x, cb.y, cb.w, cb.h, 12);
+        if (hc) { p.stroke(80, 210, 80); p.strokeWeight(1.5); p.noFill(); p.rect(cb.x, cb.y, cb.w, cb.h, 12); }
+        p.noStroke();
+        p.fill(255);
+        p.textSize(16);
+        p.textStyle(p.BOLD);
+        p.textAlign(p.CENTER, p.CENTER);
+        p.text('▶  CONTINUE', cb.x+cb.w/2, cb.y+cb.h/2);
+
+        // Reset button
+        var rb  = getPauseResetBtnRect();
+        var hr  = p.mouseX>=rb.x && p.mouseX<=rb.x+rb.w && p.mouseY>=rb.y && p.mouseY<=rb.y+rb.h;
+        p.noStroke();
+        p.fill(hr ? 185 : 145, hr ? 50 : 36, hr ? 50 : 36);
+        p.rect(rb.x, rb.y, rb.w, rb.h, 12);
+        if (hr) { p.stroke(210, 80, 80); p.strokeWeight(1.5); p.noFill(); p.rect(rb.x, rb.y, rb.w, rb.h, 12); }
+        p.noStroke();
+        p.fill(255);
+        p.textSize(16);
+        p.textStyle(p.BOLD);
+        p.textAlign(p.CENTER, p.CENTER);
+        p.text('↺  RESET', rb.x+rb.w/2, rb.y+rb.h/2);
+
+        // Hint text
+        p.noStroke();
+        p.fill(100);
+        p.textSize(11);
+        p.textStyle(p.NORMAL);
+        p.textAlign(p.CENTER, p.CENTER);
+        p.text('Edit values above to adjust your session before continuing', W/2, cardY+cardH-22);
+
+        if (hc || hr) p.cursor(p.HAND); else p.cursor(p.ARROW);
+    }
+
+    // ── PLAYING UI ────────────────────────────────────────────────────────────
+    function drawUI(phase, t) {
+        var col = p.color(COLORS[phase]);
+
+        // Stop button (top left)
         var hovering = p.mouseX>=btnX && p.mouseX<=btnX+btnW && p.mouseY>=btnY && p.mouseY<=btnY+btnH;
         p.noStroke();
         p.fill(hovering ? 55 : 35);
@@ -480,14 +647,10 @@ registerSketch('sk2', function(p) {
         p.strokeWeight(1);
         p.noFill();
         p.rect(btnX, btnY, btnW, btnH, 4);
-        if (isPlaying) {
-            p.noStroke(); p.fill(220);
-            p.rect(btnX+btnW/2-5, btnY+btnH/2-5, 10, 10, 1);
-        } else {
-            p.noStroke(); p.fill(220);
-            var cx = btnX+btnW/2, cy = btnY+btnH/2;
-            p.triangle(cx-4, cy-7, cx-4, cy+7, cx+7, cy);
-        }
+        // Stop icon (square)
+        p.noStroke();
+        p.fill(220);
+        p.rect(btnX+btnW/2-5, btnY+btnH/2-5, 10, 10, 2);
 
         // Time remaining (top right)
         var remaining = Math.max(0, sessionDurSecs - sessionElapsed);
@@ -495,7 +658,7 @@ registerSketch('sk2', function(p) {
         var remS = Math.ceil(remaining%60);
         if (remS===60) { remM++; remS=0; }
         p.noStroke();
-        p.fill(65);
+        p.fill(160);
         p.textSize(13);
         p.textStyle(p.NORMAL);
         p.textAlign(p.RIGHT, p.TOP);
@@ -507,40 +670,36 @@ registerSketch('sk2', function(p) {
         p.textAlign(p.CENTER, p.TOP);
         p.textSize(62);
         p.textStyle(p.BOLD);
-        if (isPlaying) p.text(PHASES[phase], W/2, 8);
-        else { p.fill(68); p.text('PAUSED', W/2, 8); }
+        p.text(PHASES[phase], W/2, 8);
 
         // Countdown seconds
         p.noStroke();
-        p.fill(155);
+        p.fill(210);
         p.textSize(22);
         p.textStyle(p.NORMAL);
         p.textAlign(p.CENTER, p.TOP);
-        if (isPlaying) p.text(Math.ceil(PHASE_DUR*(1-t)) + 's', W/2, 80);
-        else p.text('--', W/2, 80);
+        p.text(Math.ceil(PHASE_DUR*(1-t)) + 's', W/2, 80);
 
         // Large progress bar
         p.noStroke();
         p.fill(30);
         p.rect(W/2-230, 108, 460, 22, 11);
-        if (isPlaying) {
-            p.fill(col);
-            var barW = Math.max(0, 460 * t);
-            p.rect(W/2-230, 108, barW, 22, 11);
-        }
+        p.fill(col);
+        var barW = Math.max(0, 460 * t);
+        p.rect(W/2-230, 108, barW, 22, 11);
 
-        // Phase dots + always-visible labels
+        // Phase dots + labels
         var spacing = 52;
         var startX  = W/2 - spacing*1.5;
         for (var i = 0; i < 4; i++) {
-            var active = i===phase && isPlaying;
+            var active = i===phase;
             p.noStroke();
-            p.fill(active ? col : p.color(48));
+            p.fill(active ? col : p.color(70));
             var dx = startX + i*spacing;
             var dy = 148;
-            p.ellipse(dx, dy, active ? 16 : 10, active ? 16 : 10);
-            p.fill(active ? 210 : 58);
-            p.textSize(active ? 13 : 10);
+            p.ellipse(dx, dy, active ? 16 : 11, active ? 16 : 11);
+            p.fill(active ? 240 : 150);
+            p.textSize(active ? 13 : 11);
             p.textStyle(active ? p.BOLD : p.NORMAL);
             p.textAlign(p.CENTER, p.TOP);
             p.text(PHASES[i], dx, dy+11);
@@ -550,14 +709,24 @@ registerSketch('sk2', function(p) {
     }
 
     // ── HOOP / NET ────────────────────────────────────────────────────────────
-    function drawHoop() {
+    function drawHoop(phaseCol) {
         var hx=HOOP_X, hy=HOOP_Y, rw=RIM_W;
         p.stroke(110); p.strokeWeight(5);
         p.line(hx+rw/2+14, hy+28, hx+rw/2+14, FLOOR_Y);
-        p.fill(25, 25, 45); p.stroke(160); p.strokeWeight(3);
+
+        // Backboard colored to match phase
+        var r = p.red(phaseCol), g = p.green(phaseCol), b = p.blue(phaseCol);
+        p.fill(r*0.18, g*0.18, b*0.18);
+        p.stroke(r*0.7, g*0.7, b*0.7);
+        p.strokeWeight(3);
         p.rect(hx+rw/2+8, hy-48, 12, 80, 2);
-        p.noFill(); p.stroke(200, 50, 50); p.strokeWeight(1.5);
+
+        // Targeting square on backboard
+        p.noFill();
+        p.stroke(r, g, b);
+        p.strokeWeight(1.5);
         p.rect(hx+rw/2+9, hy-28, 10, 20);
+
         p.stroke(210, 70, 30); p.strokeWeight(4);
         p.line(hx-rw/2, hy, hx+rw/2, hy);
         drawNet();
@@ -593,12 +762,13 @@ registerSketch('sk2', function(p) {
     }
 
     // ── CHARACTER / BALL ──────────────────────────────────────────────────────
-    function drawCharacter(pose) {
+    function drawCharacter(pose, phaseCol) {
         var cx=CHAR_X, gY=FLOOR_Y, hY=gY-pose.headOff+pose.crouchDip;
         var btY=hY+14, bbY=gY-10;
-        p.noStroke(); p.fill(10, 10, 15, 60);
+        var r = p.red(phaseCol), g = p.green(phaseCol), b = p.blue(phaseCol);
+        p.noStroke(); p.fill(r*0.1, g*0.1, b*0.1, 60);
         p.ellipse(cx, gY+2, 30+pose.crouchDip*0.5, 6);
-        p.stroke(220); p.strokeWeight(3); p.noFill();
+        p.stroke(r, g, b); p.strokeWeight(3); p.noFill();
         p.line(cx, btY, cx, bbY);
         var kY=bbY+(gY-bbY)*0.5, ks=pose.kneeSpread;
         p.line(cx, bbY, cx-ks, kY);
@@ -608,7 +778,7 @@ registerSketch('sk2', function(p) {
         var sY=btY+10;
         p.line(cx, sY, cx+pose.armRightX, sY+pose.armRightY);
         p.line(cx, sY, cx+pose.armLeftX,  sY+pose.armLeftY);
-        p.fill(220); p.noStroke();
+        p.fill(r, g, b); p.noStroke();
         p.ellipse(cx, hY, 20, 20);
     }
 
