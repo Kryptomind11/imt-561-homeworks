@@ -1,10 +1,6 @@
+// Instance-mode sketch for tab 2
 registerSketch('sk2', function(p) {
     const CANVAS_SIZE = 800;
-
-    // VERSION 7: Final
-    // Character starts crouching at t=0.45 (during second bounce) to anticipate
-    // the ball rolling back. Crouch is gradual and linear so it reads as the
-    // character watching the ball and lowering to receive it.
 
     var W = 800,
         H = 800;
@@ -19,6 +15,13 @@ registerSketch('sk2', function(p) {
         HOOP_Y = 320,
         RIM_W = 52;
 
+    var isPlaying = false;
+    // button positioned to the left of the phase label
+    var btnX = W / 2 - 120 - 50,
+        btnY = 16,
+        btnW = 36,
+        btnH = 28;
+
     var POSES = {
         inhaleStart: { headOff: 90, crouchDip: 30, kneeSpread: 18, armRightX: 16, armRightY: 40, armLeftX: -10, armLeftY: 45 },
         holdStart: { headOff: 130, crouchDip: 0, kneeSpread: 6, armRightX: 14, armRightY: 18, armLeftX: -10, armLeftY: 18 },
@@ -26,9 +29,7 @@ registerSketch('sk2', function(p) {
         exhaleRelease: { headOff: 128, crouchDip: 0, kneeSpread: 6, armRightX: 16, armRightY: 8, armLeftX: -10, armLeftY: 10 },
         exhaleFollow: { headOff: 134, crouchDip: 0, kneeSpread: 2, armRightX: 24, armRightY: -30, armLeftX: -8, armLeftY: 8 },
         returnStand: { headOff: 130, crouchDip: 0, kneeSpread: 4, armRightX: 14, armRightY: 22, armLeftX: -10, armLeftY: 22 },
-        // halfway crouch — character starts bending knees, arms begin reaching
         returnMid: { headOff: 115, crouchDip: 12, kneeSpread: 10, armRightX: 15, armRightY: 30, armLeftX: -10, armLeftY: 32 },
-        // full crouch — matches inhaleStart so phase 0 is seamless
         returnCrouch: { headOff: 90, crouchDip: 30, kneeSpread: 18, armRightX: 16, armRightY: 40, armLeftX: -10, armLeftY: 45 }
     };
 
@@ -52,13 +53,28 @@ registerSketch('sk2', function(p) {
         lastMillis = p.millis();
     };
 
+    p.mousePressed = function() {
+        if (p.mouseX >= btnX && p.mouseX <= btnX + btnW &&
+            p.mouseY >= btnY && p.mouseY <= btnY + btnH) {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                lastMillis = p.millis();
+                cycleTime = 0;
+            }
+        }
+    };
+
     p.draw = function() {
-        var now = p.millis(),
-            dt = (now - lastMillis) / 1000;
+        var now = p.millis();
+        var dt = (now - lastMillis) / 1000;
         lastMillis = now;
-        cycleTime = (cycleTime + dt) % TOTAL;
-        var phase = Math.floor(cycleTime / PHASE_DUR),
-            t = (cycleTime % PHASE_DUR) / PHASE_DUR;
+
+        if (isPlaying) {
+            cycleTime = (cycleTime + dt) % TOTAL;
+        }
+
+        var phase = Math.floor(cycleTime / PHASE_DUR);
+        var t = (cycleTime % PHASE_DUR) / PHASE_DUR;
 
         p.background(18, 18, 28);
         p.noStroke();
@@ -74,51 +90,33 @@ registerSketch('sk2', function(p) {
         drawHoop();
         drawUI(phase, t);
 
-        // ── CHARACTER POSE ────────────────────────────────────────────────────
         var pose;
         if (phase === 0) {
-            // INHALE: crouched → standing
             pose = lerpPose(POSES.inhaleStart, POSES.holdStart, easeInOut(t));
-
         } else if (phase === 1) {
-            // HOLD: standing settle
             pose = lerpPose(POSES.holdStart, POSES.exhaleStart, easeInOut(t));
-
         } else if (phase === 2) {
-            // EXHALE: arms low for 1.5s, then rise
             if (t < 0.25) {
                 pose = lerpPose(POSES.exhaleStart, POSES.exhaleRelease, easeInOut(t / 0.25));
             } else {
                 var armT = Math.min(easeOut((t - 0.25) / 0.25), 1.0);
                 pose = lerpPose(POSES.exhaleRelease, POSES.exhaleFollow, armT);
             }
-
         } else {
-            // HOLD (return): follow-through → stand → anticipate → crouch
             if (t < 0.25) {
-                // follow-through relaxes to standing
                 pose = lerpPose(POSES.exhaleFollow, POSES.returnStand, easeOut(t / 0.25));
-
             } else if (t < 0.45) {
-                // standing, watching ball drop and bounce
                 pose = POSES.returnStand;
-
             } else if (t < 0.70) {
-                // ANTICIPATION: character starts lowering — sees ball bouncing back
-                // slow, steady drop to mid-crouch (knees bend, arms start reaching)
                 var anticipateT = (t - 0.45) / 0.25;
                 pose = lerpPose(POSES.returnStand, POSES.returnMid, anticipateT);
-
             } else {
-                // RECEIVE: deeper crouch as ball approaches and arrives
                 var receiveT = (t - 0.70) / 0.30;
                 pose = lerpPose(POSES.returnMid, POSES.returnCrouch, receiveT);
             }
         }
 
-        // ── BALL POSITION ─────────────────────────────────────────────────────
         var bx, by, ballSpin = 0;
-
         var rimY = HOOP_Y + 5;
         var netBottomY = HOOP_Y + 50;
         var floorBallY = FLOOR_Y - 8;
@@ -127,11 +125,9 @@ registerSketch('sk2', function(p) {
             var et = easeInOut(t);
             bx = CHAR_X + p.lerp(10, 14, et);
             by = p.lerp(FLOOR_Y - 8, FLOOR_Y - 80, et);
-
         } else if (phase === 1) {
             bx = CHAR_X + 14;
             by = FLOOR_Y - 80 + Math.sin(t * Math.PI * 2) * 3;
-
         } else if (phase === 2) {
             var st = easeInOut(t);
             var sx = CHAR_X + 14,
@@ -146,34 +142,24 @@ registerSketch('sk2', function(p) {
             bx = u * u * u * sx + 3 * u * u * st * c1x + 3 * u * st * st * c2x + st * st * st * ex;
             by = u * u * u * sy + 3 * u * u * st * c1y + 3 * u * st * st * c2y + st * st * st * ey;
             ballSpin = st * 720;
-
         } else {
             if (t < 0.25) {
-                // Drop through net with gravity
                 var dropT = easeGravity(t / 0.25);
                 bx = HOOP_X;
                 by = p.lerp(rimY, netBottomY, dropT);
-
             } else if (t < 0.32) {
-                // Fall from net to floor
                 var fallT = easeGravity((t - 0.25) / 0.07);
                 bx = p.lerp(HOOP_X, HOOP_X + 12, fallT);
                 by = p.lerp(netBottomY, floorBallY, fallT);
-
             } else if (t < 0.48) {
-                // First bounce
                 var bt = (t - 0.32) / 0.16;
                 bx = p.lerp(HOOP_X + 12, HOOP_X + 55, bt);
                 by = floorBallY - Math.sin(bt * Math.PI) * 55;
-
             } else if (t < 0.58) {
-                // Second bounce
                 var bt2 = (t - 0.48) / 0.10;
                 bx = p.lerp(HOOP_X + 55, HOOP_X + 70, bt2);
                 by = floorBallY - Math.sin(bt2 * Math.PI) * 18;
-
             } else {
-                // Roll back to character
                 var rollT = easeOut((t - 0.58) / 0.42);
                 bx = p.lerp(HOOP_X + 70, CHAR_X + 10, rollT);
                 by = floorBallY;
@@ -206,12 +192,21 @@ registerSketch('sk2', function(p) {
             drawNetRipple(rippleT);
         }
 
+        // idle message
+        if (!isPlaying && cycleTime === 0) {
+            p.fill(120);
+            p.noStroke();
+            p.textAlign(p.CENTER, p.CENTER);
+            p.textSize(16);
+            p.textStyle(p.NORMAL);
+            p.text('Press play to begin breathing', W / 2, FLOOR_Y / 2);
+        }
+
         p.fill(80);
         p.noStroke();
         p.textAlign(p.CENTER, p.BOTTOM);
         p.textSize(11);
         p.textStyle(p.NORMAL);
-        p.text('BOX BREATHING \u00B7 6s PER PHASE \u00B7 24s CYCLE', W / 2, H - 12);
         p.noFill();
         p.stroke(0);
         p.strokeWeight(1);
@@ -219,24 +214,71 @@ registerSketch('sk2', function(p) {
     };
 
     function drawUI(phase, t) {
-        var col = p.color(COLORS[phase]);
+        var col = isPlaying ? p.color(COLORS[phase]) : p.color(80);
+
+        // ── PLAY / STOP BUTTON (left of phase label) ──────────────────────────
+        var hovering = p.mouseX >= btnX && p.mouseX <= btnX + btnW &&
+            p.mouseY >= btnY && p.mouseY <= btnY + btnH;
+
+        p.noStroke();
+        p.fill(hovering ? 55 : 35);
+        p.rect(btnX, btnY, btnW, btnH, 4);
+
+        p.stroke(hovering ? 120 : 70);
+        p.strokeWeight(1);
+        p.noFill();
+        p.rect(btnX, btnY, btnW, btnH, 4);
+
+        if (isPlaying) {
+            // stop icon: square
+            p.noStroke();
+            p.fill(220);
+            var sq = 10;
+            p.rect(btnX + btnW / 2 - sq / 2, btnY + btnH / 2 - sq / 2, sq, sq, 1);
+        } else {
+            // play icon: triangle
+            p.noStroke();
+            p.fill(220);
+            var cx = btnX + btnW / 2;
+            var cy = btnY + btnH / 2;
+            p.triangle(cx - 4, cy - 7, cx - 4, cy + 7, cx + 7, cy);
+        }
+
+        // ── PHASE LABEL (centered, same position as before) ───────────────────
         p.noStroke();
         p.fill(col);
         p.textAlign(p.CENTER, p.TOP);
         p.textSize(22);
         p.textStyle(p.BOLD);
-        p.text(PHASES[phase], W / 2, 18);
+        if (isPlaying) {
+            p.text(PHASES[phase], W / 2, 18);
+        } else {
+            p.fill(80);
+            p.text('READY', W / 2, 18);
+        }
+
+        // countdown
         p.textSize(14);
         p.textStyle(p.NORMAL);
         p.fill(160);
-        p.text(Math.ceil(PHASE_DUR * (1 - t)) + 's', W / 2, 46);
+        if (isPlaying) {
+            p.text(Math.ceil(PHASE_DUR * (1 - t)) + 's', W / 2, 46);
+        } else {
+            p.text('--', W / 2, 46);
+        }
+
+        // ── PROGRESS BAR (same position and width as original) ────────────────
         p.noStroke();
         p.fill(35);
         p.rect(W / 2 - 120, 66, 240, 8, 4);
-        p.fill(col);
-        p.rect(W / 2 - 120, 66, 240 * t, 8, 4);
+        if (isPlaying) {
+            p.fill(col);
+            p.rect(W / 2 - 120, 66, 240 * t, 8, 4);
+        }
+
+        // ── PHASE DOTS (same position as original) ────────────────────────────
         for (var i = 0; i < 4; i++) {
-            var a = i === phase;
+            var a = i === phase && isPlaying;
             p.fill(a ? col : p.color(55));
             p.noStroke();
             p.ellipse(W / 2 - 45 + i * 30, 90, a ? 11 : 8, a ? 11 : 8);
@@ -247,6 +289,9 @@ registerSketch('sk2', function(p) {
                 p.text(PHASES[i], W / 2 - 45 + i * 30, 99);
             }
         }
+
+        if (hovering) p.cursor(p.HAND);
+        else p.cursor(p.ARROW);
     }
 
     function drawHoop() {
