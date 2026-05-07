@@ -19,7 +19,7 @@ registerSketch('sk3', function(p) {
 
     var cycleTime = 0,
         lastMillis = 0;
-    var sessionElapsed = 0; // total seconds since play was pressed
+    var sessionElapsed = 0;
 
     p.setup = function() {
         p.createCanvas(CANVAS_SIZE, CANVAS_SIZE);
@@ -43,7 +43,7 @@ registerSketch('sk3', function(p) {
         var dt = (now - lastMillis) / 1000;
         lastMillis = now;
         if (isPlaying) {
-            cycleTime = (cycleTime + dt) % TOTAL;
+            cycleTime = (cycleTime + dt) % (PHASE_DUR * 4);
             sessionElapsed += dt;
         }
 
@@ -52,7 +52,6 @@ registerSketch('sk3', function(p) {
 
         p.background(12, 14, 20);
 
-        // water level 0–1
         var waterLevel = 0;
         if (phase === 0) waterLevel = easeInOut(t);
         else if (phase === 1) waterLevel = 1;
@@ -67,27 +66,21 @@ registerSketch('sk3', function(p) {
         p.textAlign(p.CENTER, p.TOP);
         p.textSize(28);
         p.textStyle(p.BOLD);
-        if (isPlaying) {
-            p.text(PHASES[phase], W / 2, 20);
-        } else {
+        if (isPlaying) p.text(PHASES[phase], W / 2, 20);
+        else {
             p.fill(70);
             p.text('READY', W / 2, 20);
         }
 
-        // countdown
         p.textSize(16);
         p.textStyle(p.NORMAL);
         p.fill(isPlaying ? 140 : 50);
-        if (isPlaying) {
-            p.text(Math.ceil(PHASE_DUR * (1 - t)) + 's', W / 2, 55);
-        } else {
-            p.text('--', W / 2, 55);
-        }
+        if (isPlaying) p.text(Math.ceil(PHASE_DUR * (1 - t)) + 's', W / 2, 55);
+        else p.text('--', W / 2, 55);
 
         // ── PLAY / STOP BUTTON ────────────────────────────────────────────────
         var hovering = p.mouseX >= btnX && p.mouseX <= btnX + btnW &&
             p.mouseY >= btnY && p.mouseY <= btnY + btnH;
-
         p.noStroke();
         p.fill(hovering ? 45 : 28);
         p.rect(btnX, btnY, btnW, btnH, 6);
@@ -107,14 +100,13 @@ registerSketch('sk3', function(p) {
                 bcy = btnY + btnH / 2;
             p.triangle(bcx - 5, bcy - 8, bcx - 5, bcy + 8, bcx + 8, bcy);
         }
-
         if (hovering) p.cursor(p.HAND);
         else p.cursor(p.ARROW);
 
         // ── TRACHEA ───────────────────────────────────────────────────────────
-        var tracheaTop = 170;
-        var tracheaBot = 260;
-        var splitY = 270;
+        var tracheaTop = 170,
+            tracheaBot = 260,
+            splitY = 270;
 
         p.stroke(160, 140, 140);
         p.strokeWeight(2);
@@ -123,11 +115,8 @@ registerSketch('sk3', function(p) {
         p.line(W / 2 + 12, tracheaTop, W / 2 + 12, tracheaBot);
         p.stroke(140, 120, 120);
         p.strokeWeight(1.5);
-        for (var ring = 0; ring < 6; ring++) {
-            p.arc(W / 2, tracheaTop + 8 + ring * 14, 24, 6, 0, 180);
-        }
+        for (var ring = 0; ring < 6; ring++) p.arc(W / 2, tracheaTop + 8 + ring * 14, 24, 6, 0, 180);
 
-        // bronchi
         p.stroke(160, 140, 140);
         p.strokeWeight(2);
         p.noFill();
@@ -136,9 +125,9 @@ registerSketch('sk3', function(p) {
         p.bezier(W / 2 + 12, tracheaBot, W / 2 + 30, splitY, W / 2 + 80, splitY + 10, W / 2 + 100, splitY + 30);
         p.bezier(W / 2 - 2, tracheaBot + 4, W / 2 + 15, splitY + 5, W / 2 + 60, splitY + 18, W / 2 + 80, splitY + 38);
 
-        // ── LUNGS ─────────────────────────────────────────────────────────────
-        drawRealisticLung(W / 2 - 60, waterLevel, -1);
-        drawRealisticLung(W / 2 + 60, waterLevel, 1);
+        // ── LUNGS (symmetric, no cardiac notch) ───────────────────────────────
+        drawLung(W / 2 - 60, waterLevel, -1);
+        drawLung(W / 2 + 60, waterLevel, 1);
 
         // ── SESSION TIMER ─────────────────────────────────────────────────────
         if (isPlaying) {
@@ -146,7 +135,6 @@ registerSketch('sk3', function(p) {
             var mins = Math.floor(totalSec / 60);
             var secs = totalSec % 60;
             var timeStr = (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
-
             p.fill(90);
             p.noStroke();
             p.textAlign(p.CENTER, p.TOP);
@@ -159,7 +147,6 @@ registerSketch('sk3', function(p) {
             p.text(timeStr, W / 2, 652);
         }
 
-        // idle message
         if (!isPlaying && cycleTime === 0) {
             p.fill(80);
             p.noStroke();
@@ -169,7 +156,6 @@ registerSketch('sk3', function(p) {
             p.text('Press play to begin breathing', W / 2, 660);
         }
 
-        // footer
         p.fill(50);
         p.noStroke();
         p.textAlign(p.CENTER, p.BOTTOM);
@@ -181,9 +167,9 @@ registerSketch('sk3', function(p) {
         p.rect(0, 0, p.width - 1, p.height - 1);
     };
 
-    function drawRealisticLung(cx, waterLevel, side) {
-        var topY = 260;
-        var botY = 610;
+    function drawLung(cx, waterLevel, side) {
+        var topY = 260,
+            botY = 610;
         var lh = botY - topY;
         var breathScale = 1.0 + waterLevel * 0.08;
         var lw = 130 * breathScale;
@@ -191,8 +177,6 @@ registerSketch('sk3', function(p) {
         // ── WATER FILL ────────────────────────────────────────────────────────
         if (waterLevel > 0.005) {
             var waterTopY = botY - lh * waterLevel;
-            var waveTime = p.millis() * 0.003;
-
             p.noStroke();
             var slices = 40;
             for (var s = 0; s < slices; s++) {
@@ -200,8 +184,7 @@ registerSketch('sk3', function(p) {
                 var sliceBot = waterTopY + (botY - waterTopY) * ((s + 1) / slices);
                 var sliceMid = (sliceTop + sliceBot) / 2;
 
-                var frac = (sliceMid - topY) / lh;
-                frac = p.constrain(frac, 0, 1);
+                var frac = p.constrain((sliceMid - topY) / lh, 0, 1);
 
                 var widthAtHeight;
                 if (frac < 0.08) widthAtHeight = p.lerp(0.15, 0.45, frac / 0.08);
@@ -209,16 +192,6 @@ registerSketch('sk3', function(p) {
                 else if (frac < 0.55) widthAtHeight = p.lerp(0.85, 1.0, (frac - 0.25) / 0.3);
                 else if (frac < 0.8) widthAtHeight = p.lerp(1.0, 0.9, (frac - 0.55) / 0.25);
                 else widthAtHeight = p.lerp(0.9, 0.4, (frac - 0.8) / 0.2);
-
-                if (side === -1 && frac > 0.55 && frac < 0.8) {
-                    var notchDepth = Math.sin((frac - 0.55) / 0.25 * Math.PI) * 0.15;
-                    var innerEdge = cx + lw * 0.08 * widthAtHeight - lw * notchDepth;
-                    var outerEdge = cx - lw * 0.52 * widthAtHeight;
-                    var depth = s / slices;
-                    p.fill(p.lerp(60, 30, depth), p.lerp(150, 100, depth), p.lerp(220, 180, depth), p.lerp(120, 180, depth));
-                    p.rect(outerEdge, sliceTop, innerEdge - outerEdge, sliceBot - sliceTop);
-                    continue;
-                }
 
                 var halfW = lw * 0.5 * widthAtHeight;
                 var left, right;
@@ -230,8 +203,8 @@ registerSketch('sk3', function(p) {
                     right = cx + halfW;
                 }
 
-                var depth2 = s / slices;
-                p.fill(p.lerp(60, 30, depth2), p.lerp(150, 100, depth2), p.lerp(220, 180, depth2), p.lerp(120, 180, depth2));
+                var depth = s / slices;
+                p.fill(p.lerp(60, 30, depth), p.lerp(150, 100, depth), p.lerp(220, 180, depth), p.lerp(120, 180, depth));
                 p.rect(left, sliceTop, right - left, sliceBot - sliceTop);
             }
 
@@ -239,23 +212,21 @@ registerSketch('sk3', function(p) {
             p.stroke(90, 170, 230, 150);
             p.strokeWeight(1.5);
             p.noFill();
-            var waveFrac = (waterTopY - topY) / lh;
-            waveFrac = p.constrain(waveFrac, 0, 1);
+            var waveFrac = p.constrain((waterTopY - topY) / lh, 0, 1);
             var ww;
             if (waveFrac < 0.25) ww = p.lerp(0.3, 0.85, waveFrac / 0.25);
             else if (waveFrac < 0.55) ww = p.lerp(0.85, 1.0, (waveFrac - 0.25) / 0.3);
             else ww = p.lerp(1.0, 0.5, (waveFrac - 0.55) / 0.45);
-
             var waveHalfW = lw * 0.45 * ww;
+            var waveTime = p.millis() * 0.003;
             p.beginShape();
             for (var wx = -waveHalfW; wx <= waveHalfW; wx += 3) {
-                var wy = waterTopY + Math.sin(wx * 0.06 + waveTime + side) * 2.5;
-                p.vertex(cx + wx, wy);
+                p.vertex(cx + wx, waterTopY + Math.sin(wx * 0.06 + waveTime + side) * 2.5);
             }
             p.endShape();
         }
 
-        // ── LUNG OUTLINE ──────────────────────────────────────────────────────
+        // ── LUNG OUTLINE (symmetric for both sides) ───────────────────────────
         var outerTop = cx + side * lw * 0.25;
         var outerMid = cx + side * lw * 0.52;
         var outerBot = cx + side * lw * 0.35;
@@ -272,13 +243,8 @@ registerSketch('sk3', function(p) {
         p.bezierVertex(cx + side * lw * 0.45, topY + lh * 0.2, cx + side * lw * 0.52, topY + lh * 0.35, outerMid, topY + lh * 0.5);
         p.bezierVertex(cx + side * lw * 0.52, topY + lh * 0.65, cx + side * lw * 0.48, topY + lh * 0.82, outerBot, botY);
         p.bezierVertex(cx + side * lw * 0.15, botY + 12, cx - side * lw * 0.02, botY + 8, innerBot, botY - lh * 0.08);
-
-        if (side === -1) {
-            p.bezierVertex(cx + lw * 0.04, topY + lh * 0.75, cx + lw * 0.12, topY + lh * 0.65, cx + lw * 0.08, topY + lh * 0.55);
-            p.bezierVertex(cx + lw * 0.02, topY + lh * 0.48, cx - lw * 0.02, topY + lh * 0.35, innerMid, topY + lh * 0.25);
-        } else {
-            p.bezierVertex(cx - lw * 0.06, topY + lh * 0.7, cx - lw * 0.08, topY + lh * 0.45, innerMid, topY + lh * 0.25);
-        }
+        // smooth inner edge (same for both lungs — no notch)
+        p.bezierVertex(cx - side * lw * 0.06, topY + lh * 0.7, cx - side * lw * 0.08, topY + lh * 0.45, innerMid, topY + lh * 0.25);
         p.bezierVertex(cx - side * lw * 0.06, topY + lh * 0.12, cx - side * lw * 0.04, topY + 5, innerTop, topY);
         p.endShape(p.CLOSE);
 
